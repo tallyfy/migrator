@@ -4,6 +4,13 @@
 
 This is open source software that we are happy to share with the community. While we provide this code freely and are glad to help, **users take full responsibility for running and modifying this software**. Please test thoroughly in a non-production environment before using with production data. No warranty is provided, and users should review the MIT License for full terms and conditions.
 
+## 🔗 Getting Started with Tallyfy
+
+- **📚 Migration Documentation**: [https://tallyfy.com/products/pro/tutorials/features/migrate-to-tallyfy/](https://tallyfy.com/products/pro/tutorials/features/migrate-to-tallyfy/)
+- **🔌 Open API Documentation**: [https://go.tallyfy.com/api/](https://go.tallyfy.com/api/)
+- **🚀 Start Free Trial**: [https://tallyfy.com/start/](https://tallyfy.com/start/)
+- **📞 Schedule a Call**: [https://tallyfy.com/booking/](https://tallyfy.com/booking/)
+
 ## 🚀 Overview
 
 Transform your Basecamp project-centric collaboration platform with its communication-first approach into Tallyfy's AI-powered workflow automation platform. This production-ready migrator handles the fundamental paradigm shift from project containers to sequential workflows, including projects, to-do lists, card tables, messages, and schedules with intelligent transformation decisions.

@@ -4,6 +4,13 @@
 
 This is open source software that we are happy to share with the community. While we provide this code freely and are glad to help, **users take full responsibility for running and modifying this software**. Please test thoroughly in a non-production environment before using with production data. No warranty is provided, and users should review the MIT License for full terms and conditions.
 
+## 🔗 Getting Started with Tallyfy
+
+- **📚 Migration Documentation**: [https://tallyfy.com/products/pro/tutorials/features/migrate-to-tallyfy/](https://tallyfy.com/products/pro/tutorials/features/migrate-to-tallyfy/)
+- **🔌 Open API Documentation**: [https://go.tallyfy.com/api/](https://go.tallyfy.com/api/)
+- **🚀 Start Free Trial**: [https://tallyfy.com/start/](https://tallyfy.com/start/)
+- **📞 Schedule a Call**: [https://tallyfy.com/booking/](https://tallyfy.com/booking/)
+
 ## Overview
 
 The Monday.com to Tallyfy Migrator is a comprehensive tool designed to migrate your entire Monday.com workspace to Tallyfy. This includes boards, items, users, teams, and all associated data. The migrator handles the complex paradigm shift from Monday's flexible view system (Table/Kanban/Timeline/Calendar) to Tallyfy's sequential workflow model.
