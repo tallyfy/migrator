@@ -1,0 +1,23 @@
+Analyze this Pipefy Kanban board structure for migration to Tallyfy's sequential workflow.
+
+Pipe details:
+- Total phases: {phase_count}
+- Phase names: {phase_names}
+- Has parallel phases: {has_parallel_phases}
+- Has conditional moves: {has_conditional_moves}
+- Average cards per phase: {avg_cards_per_phase}
+
+Determine the best transformation strategy:
+1. How to convert Kanban phases to sequential steps
+2. How to handle parallel work in sequential model
+3. Training requirements for users
+
+Respond with JSON:
+{
+  "transformation_strategy": "description",
+  "estimated_steps": N,
+  "requires_training": true/false,
+  "user_impact": "low|medium|high",
+  "reasoning": "explanation",
+  "confidence": 0.0-1.0
+}

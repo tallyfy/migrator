@@ -1,0 +1,34 @@
+Determine how to handle RocketLane time tracking data in Tallyfy migration.
+
+Time tracking details:
+- Has billing integration: {has_billing}
+- Total hours logged: {total_hours_logged}
+- Tracking frequency: {tracking_frequency} (high/medium/low)
+- Users tracking time: {user_count}
+- Time categories used: {time_categories}
+- Links to invoicing: {links_to_invoicing}
+- Average hours per task: {avg_hours_per_task}
+
+Tallyfy doesn't have native time tracking. Determine strategy:
+1. "external_integration" - Integrate with external time tracking tool
+2. "structured_comments" - Add time as structured comments on tasks
+3. "task_comments" - Simple time notation in regular comments
+4. "summary_only" - Add summary time to process completion
+5. "skip" - Don't migrate time data
+
+Consider:
+- Importance of time data for billing
+- Volume of time entries
+- Need for reporting
+- User expectations
+
+Respond with JSON:
+{{
+  "strategy": "external_integration|structured_comments|task_comments|summary_only|skip",
+  "reasoning": "Explanation",
+  "format": "Suggested format for time entries if applicable",
+  "requires_external_tool": true/false,
+  "recommended_tool": "Tool name if applicable",
+  "data_export_needed": true/false,
+  "confidence": 0.0-1.0
+}}

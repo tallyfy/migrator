@@ -1,0 +1,144 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+bin/
+include/
+pip-selfcheck.json
+pyvenv.cfg
+
+# Migration data
+data/
+logs/
+reports/
+checkpoints/
+*.db
+*.sqlite
+*.sqlite3
+mappings.db
+
+# Temporary files
+temp/
+tmp/
+cache/
+*.tmp
+*.bak
+*.swp
+*~
+.cache/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+config/*.local.yaml
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Backup files
+backup/
+backups/
+*.backup
+*.old
+
+# Migration specific
+migration_*.log
+errors_*.log
+graphql_*.log
+transform_*.log
+api_*.log
+metrics_*.json
+migration_report.*
+checkpoint.json
+*.checkpoint
+
+# GraphQL cache
+graphql_cache/
+introspection_cache.json
+
+# External integrations
+postgres_backup/
+airtable_export/
+s3_downloads/
+
+# Test data
+test_data/
+fixtures/
+*.test.json
+
+# Documentation build
+docs/_build/
+docs/.doctrees/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# AWS
+.aws/
+
+# Database dumps
+*.sql
+*.dump
+*.pgdump
+
+# Large files
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+
+# Sensitive data
+secrets/
+credentials/
+tokens.json
+api_keys.txt

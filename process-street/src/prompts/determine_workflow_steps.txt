@@ -1,0 +1,22 @@
+Generate optimal workflow steps from this Process Street checklist structure.
+
+Checklist info:
+- Total tasks: {task_count}
+- Task groups: {task_groups}
+- Has stop tasks: {has_stop_tasks}
+- Has approvals: {has_approvals}
+
+Create a logical workflow that:
+- Groups related tasks appropriately
+- Handles stop tasks as approval points
+- Maintains the original flow logic
+
+Respond with JSON:
+{
+  "steps": [
+    {"name": "Step Name", "type": "task|approval", "task_count": N},
+    ...
+  ],
+  "reasoning": "Brief explanation",
+  "confidence": 0.0-1.0
+}

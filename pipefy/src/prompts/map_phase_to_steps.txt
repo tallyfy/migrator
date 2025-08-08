@@ -1,0 +1,24 @@
+Convert this Pipefy pipe phase into Tallyfy workflow steps.
+
+Phase details:
+- Name: {phase_name}
+- Type: {phase_type}
+- Can receive cards from: {can_receive_from}
+- Can move cards to: {can_move_to}
+- Fields in phase: {field_count}
+- Has SLA: {has_sla}
+
+Create optimal step structure that:
+- Preserves the phase's purpose
+- Handles entry/work/exit pattern
+- Maintains data capture requirements
+
+Respond with JSON:
+{
+  "steps": [
+    {"name": "Step Name", "type": "task|approval|form", "description": "purpose"},
+    ...
+  ],
+  "reasoning": "explanation",
+  "confidence": 0.0-1.0
+}

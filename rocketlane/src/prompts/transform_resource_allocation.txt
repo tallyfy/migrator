@@ -1,0 +1,31 @@
+Transform RocketLane resource allocation to Tallyfy task assignment.
+
+Resource allocation details:
+- Resource name: {resource_name}
+- Allocation percentage: {allocation_percentage}%
+- Required skills: {skills}
+- Allocation period: {start_date} to {end_date}
+- Is placeholder: {is_placeholder}
+- Team/Department: {team}
+
+Tallyfy doesn't have resource management. Determine best approach:
+1. Direct task assignment with notes
+2. Role-based assignment with requirements
+3. Unassigned with detailed requirements
+4. Team assignment with skill notes
+
+Consider:
+- Whether resource is a real person or placeholder
+- Importance of allocation percentage
+- How to preserve skill requirements
+- Need for capacity information
+
+Respond with JSON:
+{{
+  "assignment_type": "direct|role_based|unassigned|team",
+  "assignee": "email or role name",
+  "assignment_note": "Preserved allocation details",
+  "preserve_as_comment": true/false,
+  "skill_tags": ["skill1", "skill2"],
+  "confidence": 0.0-1.0
+}}

@@ -1,0 +1,34 @@
+Analyze this RocketLane form structure and determine optimal Tallyfy implementation.
+
+Form details:
+- Form name: {form_name}
+- Total fields: {field_count}
+- Has sections: {has_sections}
+- Section count: {section_count}
+- Has conditional logic: {has_conditions}
+- Field types present: {field_types}
+- Is customer-facing: {is_customer_facing}
+- Requires approval: {requires_approval}
+- Used in onboarding: {is_onboarding}
+
+Determine strategy:
+1. "simple_kickoff" - Single kick-off form (≤15 fields, no conditions)
+2. "multi_section" - Single form with sections (16-30 fields)
+3. "multi_step_workflow" - Multiple form steps (>30 fields or complex)
+4. "guest_form_workflow" - Customer-facing multi-step process
+
+Consider:
+- RocketLane forms are often customer-facing
+- Onboarding forms may need special handling
+- Customer experience with long forms
+- Approval requirements
+
+Respond with JSON:
+{{
+  "strategy": "simple_kickoff|multi_section|multi_step_workflow|guest_form_workflow",
+  "reasoning": "Explanation of choice",
+  "suggested_steps": ["Step name 1", "Step name 2"],
+  "guest_accessible": true/false,
+  "approval_points": ["After step X"],
+  "confidence": 0.0-1.0
+}}

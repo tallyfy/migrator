@@ -1,0 +1,20 @@
+Analyze this Process Street checklist and determine migration complexity.
+
+Checklist details:
+- Total tasks: {task_count}
+- Has conditional logic: {has_conditions}
+- Has integrations: {has_integrations}
+- Has form fields: {has_form_fields}
+- Has approvals: {has_approvals}
+
+Determine complexity level:
+1. "simple" - Basic checklist, straightforward migration
+2. "moderate" - Some complexity, may need adjustments
+3. "complex" - High complexity, requires careful transformation
+
+Respond with JSON:
+{
+  "strategy": "simple" | "moderate" | "complex",
+  "reasoning": "Brief explanation",
+  "confidence": 0.0-1.0
+}

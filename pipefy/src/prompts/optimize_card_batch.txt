@@ -1,0 +1,23 @@
+Determine optimal batch size for migrating Pipefy cards via GraphQL.
+
+Migration context:
+- Total cards to migrate: {total_cards}
+- Current complexity points: {complexity_points}
+- Max complexity per query: {max_complexity}
+- Rate limit remaining: {rate_limit_remaining}
+- Average fields per card: {avg_fields}
+
+Calculate batch size that:
+- Stays within GraphQL complexity limits
+- Maximizes efficiency
+- Avoids rate limiting
+- Ensures reliable processing
+
+Respond with JSON:
+{
+  "batch_size": N,
+  "estimated_batches": N,
+  "estimated_time_minutes": N,
+  "reasoning": "explanation",
+  "confidence": 0.0-1.0
+}

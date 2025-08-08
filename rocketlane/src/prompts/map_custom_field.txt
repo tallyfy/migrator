@@ -1,0 +1,30 @@
+Map this RocketLane custom field to the most appropriate Tallyfy capture type.
+
+Field details:
+- Field name: {field_name}
+- Field type: {field_type}
+- Field label: {field_label}
+- Description: {description}
+- Is required: {is_required}
+- Sample values: {sample_values}
+- Used in context: {context}
+- Customer visible: {customer_visible}
+
+Available Tallyfy types: {tallyfy_types}
+
+Consider:
+- RocketLane's customer onboarding focus
+- Field naming patterns (customer_, resource_, skill_, etc.)
+- Whether field contains customer data
+- Validation requirements
+
+Respond with JSON:
+{{
+  "tallyfy_type": "selected_type",
+  "validation": "email|phone|url|currency|none",
+  "transform_needed": true/false,
+  "guest_visible": true/false,
+  "preserve_original_name": true/false,
+  "needs_review": true/false,
+  "confidence": 0.0-1.0
+}}

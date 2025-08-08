@@ -1,0 +1,28 @@
+# Kissflow to Tallyfy Migration Dependencies
+
+# Core dependencies
+requests>=2.31.0
+urllib3>=2.0.0
+
+# Rate limiting and retries
+backoff>=2.2.1
+tenacity>=8.2.3
+
+# Data processing
+python-dateutil>=2.8.2
+
+# Environment and configuration
+python-dotenv>=1.0.0
+
+# Logging and monitoring
+colorlog>=6.7.0
+
+# Testing (optional, for development)
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+
+# Code quality (optional, for development)
+black>=23.7.0
+flake8>=6.0.0
+mypy>=1.4.1

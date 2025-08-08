@@ -1,0 +1,43 @@
+Analyze this Typeform structure and determine the optimal migration strategy to Tallyfy.
+
+Form details:
+- Form title: {form_title}
+- Total fields: {field_count}
+- Field types breakdown: {field_types}
+- Has logic jumps: {has_logic}
+- Logic complexity: {logic_complexity} (simple/moderate/complex)
+- Has sections/groups: {has_groups}
+- Has calculations/variables: {has_calculations}
+- File upload fields: {file_upload_count}
+- Average field complexity: {avg_complexity}
+
+Field distribution:
+{field_distribution}
+
+Determine the best strategy:
+1. "single_kickoff" - Keep as single kick-off form (≤20 fields, simple logic)
+2. "multi_step_simple" - Split into 2-3 steps (21-40 fields)
+3. "multi_step_moderate" - Split into 3-5 steps (41-60 fields)
+4. "complex_workflow" - Complex multi-step workflow (>60 fields or complex logic)
+
+Consider:
+- User cognitive load (too many fields overwhelm users)
+- Logical grouping of related fields (contact info, preferences, etc.)
+- Natural break points in the form flow
+- Logic jump patterns that suggest step boundaries
+- Optimal fields per step (10-15 ideal, max 20)
+
+Respond with JSON:
+{
+  "strategy": "single_kickoff|multi_step_simple|multi_step_moderate|complex_workflow",
+  "recommended_steps": N,
+  "reasoning": "Detailed explanation of the decision",
+  "grouping_suggestions": [
+    {"step_name": "Step 1 Name", "field_count": N, "field_types": ["type1", "type2"]},
+    {"step_name": "Step 2 Name", "field_count": N, "field_types": ["type3", "type4"]}
+  ],
+  "complexity_score": 0.0-1.0,
+  "confidence": 0.0-1.0,
+  "warnings": ["Any issues or concerns"],
+  "manual_review_needed": true/false
+}

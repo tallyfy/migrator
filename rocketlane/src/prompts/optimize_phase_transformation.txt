@@ -1,0 +1,38 @@
+Transform RocketLane project phases into Tallyfy sequential workflow steps.
+
+Phase structure:
+- Phase count: {phase_count}
+- Phase names: {phase_names}
+- Has parallel work: {has_parallel_work}
+- Average tasks per phase: {avg_tasks_per_phase}
+- Dependencies between phases: {dependencies}
+- Customer visibility per phase: {customer_visibility}
+- Typical phase duration: {phase_durations}
+
+RocketLane uses phases for project organization, often with parallel work.
+Tallyfy uses sequential steps with conditional branching.
+
+Determine transformation strategy:
+1. "direct_mapping" - One phase = one step
+2. "three_step_pattern" - Each phase = Entry/Work/Exit steps
+3. "grouped_tasks" - Phase tasks grouped into sub-steps
+4. "milestone_based" - Phases become milestone approval points
+
+Consider:
+- Customer onboarding typically has clear phases
+- Parallel work needs sequential representation
+- Customer approval points between phases
+- Maintaining project visibility
+
+Respond with JSON:
+{{
+  "strategy": "direct_mapping|three_step_pattern|grouped_tasks|milestone_based",
+  "steps_per_phase": N,
+  "total_steps": N,
+  "reasoning": "Explanation",
+  "step_structure": [
+    {{"original_phase": "Phase name", "tallyfy_steps": ["Step 1", "Step 2"]}}
+  ],
+  "requires_manual_review": true/false,
+  "confidence": 0.0-1.0
+}}

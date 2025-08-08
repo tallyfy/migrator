@@ -1,0 +1,378 @@
+# Pipefy to Tallyfy Migration Configuration
+
+# Source: Pipefy GraphQL API Configuration
+source:
+  api_url: "https://api.pipefy.com/graphql"
+  api_token: "${PIPEFY_API_TOKEN}"
+  organization_id: "${PIPEFY_ORG_ID}"
+  
+  # GraphQL specific settings
+  graphql:
+    max_query_depth: 5
+    batch_size: 10
+    timeout: 30
+    introspection_enabled: true
+    max_complexity: 1000
+    
+  # Rate limiting
+  rate_limit:
+    requests_per_minute: 100
+    retry_on_429: true
+    max_retries: 5
+    backoff_factor: 2
+    
+  # Pagination
+  page_size: 50  # Pipefy maximum
+  
+# Target: Tallyfy API Configuration
+target:
+  api_url: "${TALLYFY_API_URL}"
+  client_id: "${TALLYFY_CLIENT_ID}"
+  client_secret: "${TALLYFY_CLIENT_SECRET}"
+  organization_id: "${TALLYFY_ORG_ID}"
+  organization_slug: "${TALLYFY_ORG_SLUG}"
+  
+  # Authentication
+  auth:
+    type: "oauth2"
+    token_endpoint: "/oauth/token"
+    grant_type: "client_credentials"
+    
+  # Rate limiting
+  rate_limit:
+    requests_per_minute: 100
+    concurrent_requests: 4
+    
+# External Systems Configuration
+external_systems:
+  # Database for Pipefy tables
+  database:
+    enabled: true
+    type: "postgresql"  # postgresql, mysql, airtable, googlesheets
+    connection_string: "${DATABASE_URL}"
+    schema: "pipefy_migration"
+    create_api: true  # Create REST API for database access
+    
+  # Automation platform
+  automation:
+    enabled: true
+    platform: "webhook"  # webhook, n8n, zapier, make
+    webhook_url: "${AUTOMATION_WEBHOOK_URL}"
+    api_key: "${AUTOMATION_API_KEY}"
+    
+  # File storage for large attachments
+  storage:
+    enabled: true
+    provider: "s3"  # s3, azure, gcs, local
+    bucket: "${S3_BUCKET}"
+    region: "${AWS_REGION}"
+    access_key: "${AWS_ACCESS_KEY_ID}"
+    secret_key: "${AWS_SECRET_ACCESS_KEY}"
+    max_file_size_mb: 512  # Pipefy max
+
+# Migration Settings
+migration:
+  # Migration strategies
+  strategies:
+    tables: "external_db"  # external_db, csv_export, api_reference, skip
+    automations: "webhook"  # webhook, external_platform, document_only, skip
+    large_files: "s3_reference"  # direct, s3_reference, skip
+    connections: "metadata"  # metadata, graph_db, skip
+    
+  # Transformation rules
+  transformation:
+    phase_model: "step_group"  # step_group, flat_steps, hybrid
+    card_status_mapping: "strict"  # strict, flexible, custom
+    field_validation: "warn"  # strict, warn, skip
+    preserve_ids: true
+    
+  # Batch processing
+  batch_sizes:
+    organizations: 1
+    users: 100
+    pipes: 10  # Complex transformation
+    phases: 20
+    cards: 20  # With field data
+    fields: 50
+    tables: 5
+    table_records: 1000
+    comments: 200
+    attachments: 10
+    
+  # Retry configuration
+  retry:
+    max_attempts: 3
+    initial_delay: 5
+    max_delay: 300
+    exponential_base: 2
+    jitter: true
+    
+  # Timeout settings (seconds)
+  timeouts:
+    graphql_query: 30
+    rest_api_call: 30
+    file_download: 120
+    file_upload: 180
+    batch_operation: 600
+    database_operation: 60
+    
+  # Migration phases (in order)
+  phases:
+    - discovery       # Analyze Pipefy data
+    - foundation      # Organizations, users, labels
+    - structure       # Pipes, phases, fields
+    - data           # Cards, field values, comments
+    - external       # Tables, automations, connections
+    - files          # Attachments
+    - validation     # Verify migration
+    - post_migration # External system setup
+    
+  # Phase-specific settings
+  phase_config:
+    discovery:
+      enabled: true
+      generate_report: true
+      estimate_time: true
+      analyze_complexity: true
+      
+    foundation:
+      enabled: true
+      create_users: true
+      preserve_roles: true
+      migrate_labels: true
+      
+    structure:
+      enabled: true
+      transform_phases: true
+      map_fields: true
+      preserve_order: true
+      create_templates: true
+      
+    data:
+      enabled: true
+      include_archived: false
+      include_done: true
+      preserve_history: true
+      migrate_comments: true
+      
+    external:
+      enabled: true
+      setup_database: true
+      configure_automations: true
+      create_webhooks: true
+      
+    files:
+      enabled: true
+      download_locally: true
+      verify_integrity: true
+      max_file_size_mb: 100  # Tallyfy limit
+      
+    validation:
+      enabled: true
+      verify_counts: true
+      check_relationships: true
+      test_automations: true
+      validate_data: true
+      
+    post_migration:
+      enabled: true
+      setup_dashboards: true
+      configure_reports: true
+      create_documentation: true
+      
+  # Migration options
+  options:
+    dry_run: false
+    validate_only: false
+    resume_on_error: true
+    continue_on_error: true
+    create_rollback_data: true
+    parallel_processing: true
+    parallel_workers: 4
+    
+# Storage Configuration
+storage:
+  # Local directories (relative paths)
+  base_dir: "."
+  temp_dir: "${base_dir}/data/temp"
+  cache_dir: "${base_dir}/data/cache"
+  backup_dir: "${base_dir}/data/backup"
+  
+  # Database for ID mappings
+  mapping_database:
+    type: "sqlite"
+    path: "${base_dir}/data/mappings.db"
+    
+  # GraphQL cache
+  graphql_cache:
+    enabled: true
+    ttl: 300  # 5 minutes
+    path: "${base_dir}/data/cache/graphql"
+    
+  # File storage
+  files:
+    download_dir: "${base_dir}/data/files/downloads"
+    upload_staging: "${base_dir}/data/files/staging"
+    
+  # Checkpoint storage
+  checkpoints:
+    enabled: true
+    directory: "${base_dir}/data/checkpoints"
+    keep_last: 5
+    
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "json"  # json or text
+  
+  # Log files
+  files:
+    main: "${base_dir}/logs/migration_{timestamp}.log"
+    errors: "${base_dir}/logs/errors_{timestamp}.log"
+    graphql: "${base_dir}/logs/graphql_{timestamp}.log"
+    transformations: "${base_dir}/logs/transform_{timestamp}.log"
+    
+  # Console output
+  console:
+    enabled: true
+    level: "INFO"
+    color: true
+    
+  # Log rotation
+  rotation:
+    max_bytes: 10485760  # 10MB
+    backup_count: 5
+    
+# Monitoring & Reporting
+monitoring:
+  # Progress tracking
+  progress:
+    enabled: true
+    update_interval: 10  # seconds
+    show_eta: true
+    track_complexity: true
+    
+  # Metrics collection
+  metrics:
+    enabled: true
+    export_format: "json"
+    track_graphql: true
+    track_transformations: true
+    output_file: "${base_dir}/reports/metrics_{timestamp}.json"
+    
+  # Report generation
+  reports:
+    enabled: true
+    formats: ["html", "json", "csv", "pdf"]
+    output_dir: "${base_dir}/reports"
+    include_details: true
+    include_failures: true
+    include_warnings: true
+    
+  # Notifications
+  notifications:
+    enabled: false
+    channels:
+      email:
+        enabled: false
+        smtp_host: "smtp.gmail.com"
+        smtp_port: 587
+        from: "migration@example.com"
+        to: ["admin@example.com"]
+      slack:
+        enabled: false
+        webhook_url: "${SLACK_WEBHOOK_URL}"
+      teams:
+        enabled: false
+        webhook_url: "${TEAMS_WEBHOOK_URL}"
+        
+# Validation Settings
+validation:
+  # Pre-migration validation
+  pre_migration:
+    check_api_access: true
+    verify_credentials: true
+    estimate_data_size: true
+    check_disk_space: true
+    validate_schema: true
+    check_dependencies: true
+    
+  # Post-migration validation
+  post_migration:
+    verify_counts: true
+    check_relationships: true
+    validate_data_integrity: true
+    test_sample_access: true
+    verify_automations: true
+    check_file_access: true
+    
+  # Validation rules
+  rules:
+    require_unique_emails: true
+    validate_required_fields: true
+    check_data_types: true
+    verify_file_integrity: true
+    validate_phase_flow: true
+    check_field_mappings: true
+    
+  # Validation thresholds
+  thresholds:
+    min_success_rate: 95  # Percentage
+    max_errors: 100
+    max_warnings: 500
+    
+# Security Settings
+security:
+  # Encryption
+  encryption:
+    enabled: true
+    algorithm: "AES-256"
+    key_source: "environment"  # environment or file
+    encrypt_pii: true
+    
+  # Sensitive data handling
+  sensitive_data:
+    mask_in_logs: true
+    fields: ["password", "api_key", "secret", "token", "ssn", "tax_id"]
+    
+  # Audit trail
+  audit:
+    enabled: true
+    log_all_operations: true
+    include_user_data: false
+    track_access: true
+    
+# Advanced Settings
+advanced:
+  # Memory management
+  memory:
+    max_memory_mb: 4096
+    gc_threshold: 1000
+    cache_size_mb: 512
+    
+  # Connection pooling
+  connection_pool:
+    min_size: 2
+    max_size: 10
+    timeout: 30
+    
+  # GraphQL optimization
+  graphql:
+    use_fragments: true
+    batch_queries: true
+    cache_introspection: true
+    optimize_depth: true
+    
+  # Performance tuning
+  performance:
+    prefetch_related: true
+    lazy_loading: true
+    compression: true
+    
+  # Debug options
+  debug:
+    enabled: false
+    save_raw_responses: false
+    log_graphql_queries: false
+    profile_performance: false
+    trace_transformations: false

@@ -1,0 +1,17 @@
+Map this Process Street field to the most appropriate Tallyfy field type.
+
+Process Street field:
+- Name: {field_name}
+- Type: {vendor_type}
+- Description: {description}
+- Sample values: {samples}
+
+Available Tallyfy types: {tallyfy_types}
+
+Consider the field's purpose and typical usage. Respond with JSON:
+{
+  "tallyfy_type": "selected_type",
+  "transform_needed": true/false,
+  "validation": "email|phone|url|none",
+  "confidence": 0.0-1.0
+}

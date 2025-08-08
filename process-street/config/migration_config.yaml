@@ -1,0 +1,266 @@
+# Process Street to Tallyfy Migration Configuration
+
+# Source: Process Street API Configuration
+source:
+  api_key: "${PROCESS_STREET_API_KEY}"
+  base_url: "https://public-api.process.st"
+  api_version: "v1"
+  organization_id: "${PS_ORGANIZATION_ID}"
+  
+  # Rate limiting settings
+  rate_limit:
+    requests_per_minute: 60
+    retry_on_429: true
+    max_retries: 5
+    backoff_factor: 2
+  
+  # Pagination
+  page_size: 20  # Fixed by Process Street API
+  
+# Target: Tallyfy API Configuration  
+target:
+  api_url: "${TALLYFY_API_URL}"
+  client_id: "${TALLYFY_CLIENT_ID}"
+  client_secret: "${TALLYFY_CLIENT_SECRET}"
+  organization_id: "${TALLYFY_ORG_ID}"
+  organization_slug: "${TALLYFY_ORG_SLUG}"
+  
+  # Authentication
+  auth:
+    type: "oauth2"
+    token_endpoint: "/oauth/token"
+    grant_type: "client_credentials"
+    
+  # Rate limiting
+  rate_limit:
+    requests_per_minute: 100
+    concurrent_requests: 4
+    
+# Migration Settings
+migration:
+  # Batch processing
+  batch_sizes:
+    users: 100
+    templates: 50
+    instances: 20
+    comments: 200
+    files: 10
+    
+  # Retry configuration
+  retry:
+    max_attempts: 3
+    initial_delay: 5
+    max_delay: 300
+    exponential_base: 2
+    jitter: true
+    
+  # Timeout settings (seconds)
+  timeouts:
+    api_call: 30
+    file_download: 120
+    file_upload: 180
+    batch_operation: 600
+    
+  # Migration phases (in order)
+  phases:
+    - discovery
+    - users
+    - groups
+    - templates
+    - instances
+    - comments
+    - files
+    - webhooks
+    - validation
+    
+  # Phase-specific settings
+  phase_config:
+    discovery:
+      enabled: true
+      generate_report: true
+      estimate_time: true
+      
+    users:
+      enabled: true
+      create_if_not_exists: true
+      update_existing: false
+      send_invitations: false
+      default_role: "member"
+      
+    templates:
+      enabled: true
+      preserve_structure: true
+      convert_conditional_logic: true
+      map_approvals: true
+      
+    instances:
+      enabled: true
+      include_completed: true
+      include_active: true
+      preserve_progress: true
+      
+    files:
+      enabled: true
+      download_locally: true
+      upload_to_s3: true
+      max_file_size_mb: 100
+      
+  # Migration options
+  options:
+    dry_run: false
+    validate_only: false
+    preserve_external_ids: true
+    skip_validation: false
+    parallel_processing: true
+    parallel_workers: 4
+    continue_on_error: true
+    create_rollback_data: true
+    
+# Storage Configuration
+storage:
+  # Local directories (relative to migrator/process-street)
+  base_dir: "."
+  temp_dir: "${base_dir}/data/temp"
+  cache_dir: "${base_dir}/data/cache"
+  backup_dir: "${base_dir}/data/backup"
+  
+  # Database for ID mappings
+  mapping_database:
+    type: "sqlite"
+    path: "${base_dir}/data/mappings.db"
+    
+  # File storage
+  files:
+    download_dir: "${base_dir}/data/files/downloads"
+    upload_staging: "${base_dir}/data/files/staging"
+    
+  # Checkpoint storage
+  checkpoints:
+    enabled: true
+    directory: "${base_dir}/data/checkpoints"
+    keep_last: 5
+    
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "json"  # json or text
+  
+  # Log files
+  files:
+    main: "${base_dir}/logs/migration_{timestamp}.log"
+    errors: "${base_dir}/logs/errors_{timestamp}.log"
+    api_calls: "${base_dir}/logs/api_{timestamp}.log"
+    
+  # Console output
+  console:
+    enabled: true
+    level: "INFO"
+    color: true
+    
+  # Log rotation
+  rotation:
+    max_bytes: 10485760  # 10MB
+    backup_count: 5
+    
+# Monitoring & Reporting
+monitoring:
+  # Progress tracking
+  progress:
+    enabled: true
+    update_interval: 10  # seconds
+    show_eta: true
+    
+  # Metrics collection
+  metrics:
+    enabled: true
+    export_format: "json"
+    output_file: "${base_dir}/reports/metrics_{timestamp}.json"
+    
+  # Report generation
+  reports:
+    enabled: true
+    formats: ["html", "json", "csv"]
+    output_dir: "${base_dir}/reports"
+    include_details: true
+    
+  # Notifications
+  notifications:
+    enabled: false
+    channels:
+      email:
+        enabled: false
+        smtp_host: "smtp.gmail.com"
+        smtp_port: 587
+        from: "migration@example.com"
+        to: ["admin@example.com"]
+      slack:
+        enabled: false
+        webhook_url: "${SLACK_WEBHOOK_URL}"
+        
+# Validation Settings
+validation:
+  # Pre-migration validation
+  pre_migration:
+    check_api_access: true
+    verify_credentials: true
+    estimate_data_size: true
+    check_disk_space: true
+    
+  # Post-migration validation
+  post_migration:
+    verify_counts: true
+    check_relationships: true
+    validate_data_integrity: true
+    test_sample_access: true
+    
+  # Validation rules
+  rules:
+    require_unique_emails: true
+    validate_required_fields: true
+    check_data_types: true
+    verify_file_integrity: true
+    
+# Security Settings
+security:
+  # Encryption
+  encryption:
+    enabled: true
+    algorithm: "AES-256"
+    key_source: "environment"  # environment or file
+    
+  # Sensitive data handling
+  sensitive_data:
+    mask_in_logs: true
+    fields: ["password", "api_key", "secret", "token"]
+    
+  # Audit trail
+  audit:
+    enabled: true
+    log_all_operations: true
+    include_user_data: false
+    
+# Advanced Settings
+advanced:
+  # Memory management
+  memory:
+    max_memory_mb: 4096
+    gc_threshold: 1000
+    
+  # Connection pooling
+  connection_pool:
+    min_size: 2
+    max_size: 10
+    timeout: 30
+    
+  # Cache settings
+  cache:
+    enabled: true
+    ttl: 300  # seconds
+    max_entries: 1000
+    
+  # Debug options
+  debug:
+    enabled: false
+    save_raw_responses: false
+    log_sql_queries: false
+    profile_performance: false

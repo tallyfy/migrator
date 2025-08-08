@@ -1,0 +1,18 @@
+Analyze Process Street conditional logic for migration to Tallyfy.
+
+Conditions present:
+{conditions}
+
+Evaluate:
+1. Can these conditions be migrated to Tallyfy rules?
+2. What manual configuration is needed?
+3. Are there any patterns that cannot be replicated?
+
+Respond with JSON:
+{
+  "can_migrate": true/false,
+  "manual_steps": ["step1", "step2"],
+  "unsupported": ["pattern1"],
+  "recommended_approach": "description",
+  "confidence": 0.0-1.0
+}

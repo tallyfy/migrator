@@ -1,0 +1,22 @@
+Determine optimal batch size for migration processing.
+
+Migration context:
+- Total items: {total_items}
+- Average complexity: {complexity}
+- Available memory: {available_memory}
+- API rate limits: {rate_limits}
+- Item size estimate: {item_size}
+
+Recommend batch size that:
+- Maximizes efficiency
+- Stays within rate limits
+- Prevents memory issues
+- Ensures reliable processing
+
+Respond with JSON:
+{
+  "batch_size": N,
+  "reasoning": "Brief explanation",
+  "estimated_time": "time estimate",
+  "confidence": 0.0-1.0
+}

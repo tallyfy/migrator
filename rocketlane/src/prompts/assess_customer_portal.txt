@@ -1,0 +1,31 @@
+Analyze this RocketLane customer portal usage and determine the best migration strategy to Tallyfy.
+
+Customer portal details:
+- Customer name: {customer_name}
+- Portal access frequency: {interaction_count} interactions
+- Has submitted forms: {has_forms}
+- Views project progress: {views_progress}
+- Downloads documents: {downloads_documents}
+- Participates in approvals: {has_approvals}
+- Comments on tasks: {comments_count}
+
+Determine migration strategy:
+1. "guest_users" - Create guest users with limited process access
+2. "guest_forms" - Only provide form submission capability
+3. "documentation" - Document process, no direct access
+4. "organization" - Create as separate organization with controlled access
+
+Consider:
+- Frequency of customer interaction
+- Type of interactions (passive viewing vs active participation)
+- Security and data sensitivity
+- Tallyfy's guest user limitations
+
+Respond with JSON:
+{{
+  "strategy": "guest_users|guest_forms|documentation|organization",
+  "reasoning": "Brief explanation of decision",
+  "access_level": "full|limited|forms_only|none",
+  "requires_review": true/false,
+  "confidence": 0.0-1.0
+}}

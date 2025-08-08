@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Migration data
+data/
+logs/
+reports/
+checkpoints/
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+temp/
+tmp/
+cache/
+*.tmp
+*.bak
+*.swp
+*~
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Backup files
+backup/
+backups/
+*.backup
+
+# Migration specific
+mappings.db
+migration_*.log
+errors_*.log
+api_*.log
+metrics_*.json
+migration_report.json
+migration_report.html
+checkpoint.json
