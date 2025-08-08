@@ -298,6 +298,207 @@ This triples the number of steps and changes the user experience significantly.
    - Fix issues as they arise
    - Gather feedback
 
+## 🔧 Technical Implementation Details
+
+### GraphQL Query Optimization
+
+The migrator uses efficient GraphQL queries with cursor-based pagination:
+
+```python
+# Efficient pipe fetching with nested data
+PIPE_QUERY = """
+query($id: ID!, $cursor: String) {
+  pipe(id: $id) {
+    phases {
+      cards(first: 50, after: $cursor) {
+        edges {
+          node {
+            id
+            title
+            fields {
+              name
+              value
+            }
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+}
+"""
+# Batches of 50 cards minimize API calls while avoiding timeouts
+```
+
+### Phase-to-Step Transformation Logic
+
+```python
+def transform_phase_to_steps(phase):
+    """Each Pipefy phase becomes 3 Tallyfy steps"""
+    steps = []
+    
+    # Step 1: Entry notification
+    steps.append({
+        'name': f'📥 Entering {phase.name}',
+        'type': 'information',
+        'description': f'Card has moved to {phase.name}',
+        'auto_complete': True
+    })
+    
+    # Step 2: Work execution
+    steps.append({
+        'name': f'📝 {phase.name} Tasks',
+        'type': 'task',
+        'fields': transform_phase_fields(phase.fields),
+        'assignees': phase.assignees
+    })
+    
+    # Step 3: Routing decision
+    if phase.next_phases:
+        steps.append({
+            'name': f'➡️ Route from {phase.name}',
+            'type': 'approval',
+            'options': [p.name for p in phase.next_phases]
+        })
+    
+    return steps
+```
+
+### Performance Optimization
+
+```python
+# Rate limiting with exponential backoff
+RATE_LIMITS = {
+    'queries_per_minute': 100,
+    'complexity_per_minute': 10000,
+    'retry_delays': [1, 2, 4, 8, 16, 32],
+    'batch_sizes': {
+        'pipes': 10,
+        'cards': 50,
+        'fields': 100,
+        'users': 200
+    }
+}
+
+# Memory management for large migrations
+def process_cards_in_batches(pipe_id):
+    cursor = None
+    while True:
+        cards = fetch_cards(pipe_id, cursor, limit=50)
+        process_batch(cards)
+        
+        # Clear memory between batches
+        del cards
+        gc.collect()
+        
+        if not has_next_page:
+            break
+        cursor = end_cursor
+        time.sleep(1)  # Rate limit protection
+```
+
+### Field Type Mapping Details
+
+```python
+FIELD_TYPE_MAP = {
+    # Simple mappings
+    'short_text': 'text',
+    'long_text': 'textarea',
+    'number': 'number',
+    'date': 'date',
+    'datetime': 'datetime',
+    'email': 'email',
+    'phone': 'phone',
+    'currency': 'text',  # With $ prefix
+    
+    # Complex mappings
+    'select': 'dropdown',
+    'radio': 'radio',
+    'checklist': 'checkbox_list',
+    'assignee': 'assignees_form',
+    'attachment': 'file',
+    
+    # Special handling required
+    'connector': 'text',  # Store ID, link in description
+    'database': 'text',   # Reference external PostgreSQL
+    'formula': 'text',    # Store formula, calculate externally
+    'label': 'tags',      # Convert to Tallyfy tags
+}
+```
+
+### Database Table Migration
+
+For Pipefy database tables, the migrator creates PostgreSQL tables:
+
+```sql
+-- Auto-generated schema for Pipefy tables
+CREATE TABLE pipefy_[table_id] (
+    id SERIAL PRIMARY KEY,
+    pipefy_id VARCHAR(255) UNIQUE,
+    tallyfy_process_id VARCHAR(255),
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    -- Dynamic columns based on table fields
+    field_1 VARCHAR(255),
+    field_2 TEXT,
+    field_3 INTEGER,
+    -- ...
+);
+
+-- Index for performance
+CREATE INDEX idx_pipefy_id ON pipefy_[table_id](pipefy_id);
+CREATE INDEX idx_tallyfy_id ON pipefy_[table_id](tallyfy_process_id);
+```
+
+### Connection Handling
+
+Since Tallyfy doesn't support card connections, we store them as metadata:
+
+```json
+{
+  "process_metadata": {
+    "pipefy_connections": [
+      {
+        "type": "parent",
+        "pipe_id": "12345",
+        "card_id": "67890",
+        "tallyfy_process_id": "tfy_abc123"
+      },
+      {
+        "type": "related",
+        "pipe_id": "11111",
+        "card_id": "22222",
+        "tallyfy_process_id": "tfy_def456"
+      }
+    ]
+  }
+}
+```
+
+### Migration Time Estimates
+
+Based on production migrations:
+
+| Data Volume | Pipes | Cards | Fields | Users | Migration Time |
+|------------|-------|-------|--------|-------|----------------|
+| Small | <10 | <1,000 | <100 | <50 | 2-4 hours |
+| Medium | 10-50 | 1,000-10,000 | 100-500 | 50-200 | 8-16 hours |
+| Large | 50-200 | 10,000-50,000 | 500-2,000 | 200-1,000 | 24-48 hours |
+| Enterprise | 200+ | 50,000+ | 2,000+ | 1,000+ | 3-7 days |
+
+### Common GraphQL Errors & Solutions
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `COMPLEXITY_LIMIT_EXCEEDED` | Query too complex | Reduce batch size, simplify query |
+| `RATE_LIMIT_EXCEEDED` | Too many requests | Implement exponential backoff |
+| `TIMEOUT` | Large dataset | Use cursor pagination, smaller batches |
+| `INVALID_TOKEN` | Expired/wrong token | Regenerate token, check permissions |
+| `FIELD_NOT_FOUND` | Schema mismatch | Update GraphQL schema, check API version |
+
 ## Configuration
 
 ### Environment Variables (.env)

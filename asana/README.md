@@ -150,6 +150,178 @@ Generates a detailed analysis without performing migration.
 
 Enables DEBUG level logging for troubleshooting.
 
+### Pagination Handling Implementation
+
+```python
+class AsanaClient:
+    def __init__(self):
+        self.client = asana.Client.access_token(self.token)
+        self.page_size = 100  # Asana's max
+        
+    def get_all_tasks(self, project_gid):
+        """Handle Asana's offset-based pagination"""
+        all_tasks = []
+        offset = None
+        
+        while True:
+            # Asana uses offset token for pagination
+            options = {
+                'limit': self.page_size,
+                'opt_fields': 'name,notes,completed,assignee,custom_fields,due_on,dependencies'
+            }
+            if offset:
+                options['offset'] = offset
+                
+            result = self.client.tasks.find_by_project(project_gid, options)
+            
+            # Result is a generator with next_page info
+            page_tasks = list(result)
+            all_tasks.extend(page_tasks)
+            
+            # Check for next page
+            if hasattr(result, '_next_page') and result._next_page:
+                offset = result._next_page.get('offset')
+            else:
+                break
+                
+        return all_tasks
+    
+    def handle_rate_limits(self, func, *args, **kwargs):
+        """Asana-specific rate limit handling"""
+        max_retries = 5
+        base_delay = 1
+        
+        for attempt in range(max_retries):
+            try:
+                return func(*args, **kwargs)
+            except asana.error.RateLimitEnforcedError as e:
+                # Asana provides retry-after in seconds
+                retry_after = e.retry_after or (base_delay * (2 ** attempt))
+                logger.warning(f"Rate limited. Waiting {retry_after}s")
+                time.sleep(retry_after)
+            except asana.error.InvalidTokenError:
+                logger.error("Invalid token - check permissions")
+                raise
+                
+        raise Exception(f"Max retries exceeded for {func.__name__}")
+```
+
+### Custom Fields Mapping
+
+```python
+def map_custom_fields(self, asana_field):
+    """Map Asana custom field types to Tallyfy"""
+    
+    FIELD_TYPE_MAPPING = {
+        'text': 'text',
+        'number': 'text',  # With numeric validation
+        'enum': 'dropdown',
+        'multi_enum': 'multiselect',
+        'date': 'date',
+        'people': 'assignees_form'
+    }
+    
+    tallyfy_field = {
+        'name': asana_field['name'],
+        'type': FIELD_TYPE_MAPPING.get(asana_field['type'], 'text'),
+        'required': asana_field.get('is_required', False)
+    }
+    
+    # Handle special cases
+    if asana_field['type'] == 'number':
+        tallyfy_field['validation'] = 'numeric'
+        if asana_field.get('precision'):
+            tallyfy_field['validation'] += f"|decimal:{asana_field['precision']}"
+            
+    elif asana_field['type'] in ['enum', 'multi_enum']:
+        # Map enum options
+        tallyfy_field['options'] = [
+            {
+                'value': opt['gid'],
+                'label': opt['name'],
+                'color': opt.get('color', '#000000')
+            }
+            for opt in asana_field.get('enum_options', [])
+        ]
+        
+    elif asana_field['type'] == 'people':
+        # Map to user selection with multi-select
+        tallyfy_field['allow_multiple'] = True
+        tallyfy_field['allow_guests'] = True
+        
+    return tallyfy_field
+```
+
+### Task Dependencies Handling
+
+```python
+def transform_dependencies(self, task_with_deps):
+    """
+    Asana has complex dependency graphs, Tallyfy uses sequential steps
+    Strategy: Convert to step groups with dependency metadata
+    """
+    
+    dependency_map = {}
+    step_order = []
+    
+    # Build dependency graph
+    for task in task_with_deps:
+        deps = task.get('dependencies', [])
+        dependency_map[task['gid']] = {
+            'task': task,
+            'depends_on': [d['gid'] for d in deps],
+            'dependents': []
+        }
+    
+    # Find dependents (reverse mapping)
+    for gid, info in dependency_map.items():
+        for dep_gid in info['depends_on']:
+            if dep_gid in dependency_map:
+                dependency_map[dep_gid]['dependents'].append(gid)
+    
+    # Topological sort for sequential order
+    visited = set()
+    
+    def visit(gid):
+        if gid in visited:
+            return
+        visited.add(gid)
+        
+        # Visit dependencies first
+        for dep_gid in dependency_map[gid]['depends_on']:
+            if dep_gid in dependency_map:
+                visit(dep_gid)
+                
+        step_order.append(gid)
+    
+    # Start with tasks that have no dependencies
+    for gid, info in dependency_map.items():
+        if not info['depends_on']:
+            visit(gid)
+    
+    # Handle remaining (circular dependencies)
+    for gid in dependency_map:
+        visit(gid)
+    
+    # Convert to Tallyfy steps
+    tallyfy_steps = []
+    for i, gid in enumerate(step_order):
+        task = dependency_map[gid]['task']
+        
+        tallyfy_steps.append({
+            'name': task['name'],
+            'description': task.get('notes', ''),
+            'order': i + 1,
+            'metadata': {
+                'asana_gid': gid,
+                'original_dependencies': dependency_map[gid]['depends_on'],
+                'original_dependents': dependency_map[gid]['dependents']
+            }
+        })
+    
+    return tallyfy_steps
+```
+
 ## 🎯 Paradigm Shifts
 
 ### Board View (Kanban) → Sequential Workflow
@@ -253,6 +425,104 @@ After migration, the tool automatically validates:
 - **Tallyfy**: 100 requests/minute
 
 The tool automatically handles rate limiting with exponential backoff.
+
+### Performance Optimization Strategies
+
+```python
+class PerformanceOptimizer:
+    def __init__(self):
+        self.batch_size = 100
+        self.concurrent_workers = 5
+        
+    def optimize_large_project_migration(self, project_gid):
+        """Optimizations for projects with 1000+ tasks"""
+        
+        # 1. Use field optimization
+        minimal_fields = 'gid,name,completed,assignee.gid'
+        
+        # 2. Parallel processing with thread pool
+        from concurrent.futures import ThreadPoolExecutor
+        
+        with ThreadPoolExecutor(max_workers=self.concurrent_workers) as executor:
+            # Fetch tasks in parallel batches
+            futures = []
+            
+            for offset in range(0, estimated_count, self.batch_size):
+                future = executor.submit(
+                    self.fetch_task_batch, 
+                    project_gid, 
+                    offset, 
+                    minimal_fields
+                )
+                futures.append(future)
+            
+            # Collect results
+            all_tasks = []
+            for future in futures:
+                batch = future.result()
+                all_tasks.extend(batch)
+                
+        return all_tasks
+    
+    def optimize_custom_fields(self, workspace_gid):
+        """Cache custom field definitions"""
+        
+        # Custom fields are workspace-wide, cache them
+        if not hasattr(self, '_custom_fields_cache'):
+            self._custom_fields_cache = {}
+            
+        if workspace_gid not in self._custom_fields_cache:
+            fields = self.client.custom_fields.find_by_workspace(
+                workspace_gid,
+                opt_fields='gid,name,type,enum_options,precision,is_required'
+            )
+            self._custom_fields_cache[workspace_gid] = {
+                f['gid']: f for f in fields
+            }
+            
+        return self._custom_fields_cache[workspace_gid]
+```
+
+### Memory-Efficient Processing
+
+```python
+def stream_large_attachments(self, attachment_gid):
+    """Stream large files without loading into memory"""
+    
+    # Get attachment metadata
+    attachment = self.client.attachments.find_by_id(attachment_gid)
+    
+    if attachment['size'] > 50_000_000:  # 50MB
+        # Stream directly to Tallyfy
+        response = requests.get(attachment['download_url'], stream=True)
+        
+        # Upload in chunks
+        chunk_size = 1024 * 1024  # 1MB chunks
+        
+        upload_session = self.tallyfy_client.create_upload_session(
+            filename=attachment['name'],
+            size=attachment['size']
+        )
+        
+        for chunk in response.iter_content(chunk_size=chunk_size):
+            upload_session.upload_chunk(chunk)
+            
+        return upload_session.finalize()
+    else:
+        # Small file, use regular upload
+        content = requests.get(attachment['download_url']).content
+        return self.tallyfy_client.upload_file(content, attachment['name'])
+```
+
+### Common Performance Bottlenecks
+
+| Issue | Impact | Solution |
+|-------|--------|----------|
+| Large custom field lists | 5-10x slower | Cache field definitions |
+| Deep task dependencies | O(n²) complexity | Use topological sort |
+| Many subtasks | API call explosion | Batch fetch with includes |
+| Large attachments | Memory overflow | Stream processing |
+| Board views with 100+ columns | Timeout issues | Process columns individually |
 
 ## 🐛 Troubleshooting
 

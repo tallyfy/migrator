@@ -197,6 +197,277 @@ BACKUP_DIR=./backups       # Checkpoint backup location
 - Tallyfy: 600 requests/minute
 - Built-in exponential backoff and retry logic
 
+### Multi-Module Handling Implementation
+
+```python
+class KissflowModuleRouter:
+    """Routes different Kissflow modules to appropriate transformers"""
+    
+    def __init__(self):
+        self.transformers = {
+            'process': ProcessTransformer(),
+            'board': BoardTransformer(),
+            'app': AppTransformer(),
+            'dataset': DatasetTransformer(),
+            'form': FormTransformer()
+        }
+        
+    def analyze_account(self, account_id):
+        """Discover all modules in Kissflow account"""
+        modules = {
+            'processes': [],
+            'boards': [],
+            'apps': [],
+            'datasets': [],
+            'forms': []
+        }
+        
+        # Fetch all module types via different endpoints
+        modules['processes'] = self.client.get(f'/processes')
+        modules['boards'] = self.client.get(f'/boards')
+        modules['apps'] = self.client.get(f'/apps')
+        modules['datasets'] = self.client.get(f'/datasets')
+        modules['forms'] = self.client.get(f'/forms')
+        
+        # Calculate complexity score
+        complexity = self.assess_migration_complexity(modules)
+        
+        return {
+            'modules': modules,
+            'total_count': sum(len(m) for m in modules.values()),
+            'complexity': complexity,
+            'estimated_hours': self.estimate_migration_time(modules)
+        }
+    
+    def route_module(self, module):
+        """Route module to appropriate transformer"""
+        module_type = module.get('_module_type', 'process')
+        transformer = self.transformers.get(module_type)
+        
+        if not transformer:
+            logger.warning(f"Unknown module type: {module_type}")
+            transformer = self.transformers['process']  # Default
+            
+        return transformer.transform(module)
+```
+
+### Board to Sequential Transformation
+
+```python
+class BoardTransformer:
+    """Critical: Transforms Kissflow Kanban boards to Tallyfy sequential workflows"""
+    
+    def transform_board_to_workflow(self, board):
+        """
+        Kissflow Board: Columns with cards that move horizontally
+        Tallyfy: Sequential steps that complete vertically
+        """
+        
+        workflow_steps = []
+        step_order = 1
+        
+        for column in board['columns']:
+            # Each Kanban column becomes 3 steps in Tallyfy
+            
+            # 1. Entry step - Notification/preparation
+            workflow_steps.append({
+                'order': step_order,
+                'name': f"Enter {column['name']}",
+                'type': 'notification',
+                'description': f"Item has entered {column['name']} stage",
+                'auto_complete': True,
+                'duration_minutes': 0
+            })
+            step_order += 1
+            
+            # 2. Work step - Actual work in this column
+            workflow_steps.append({
+                'order': step_order,
+                'name': column['name'],
+                'type': 'task',
+                'description': column.get('description', ''),
+                'assignees': self.map_column_assignees(column),
+                'fields': self.extract_column_fields(column),
+                'duration_minutes': column.get('sla_hours', 24) * 60
+            })
+            step_order += 1
+            
+            # 3. Exit step - Approval to move to next column
+            if column.get('requires_approval'):
+                workflow_steps.append({
+                    'order': step_order,
+                    'name': f"Approve exit from {column['name']}",
+                    'type': 'approval',
+                    'description': f"Approve moving to next stage",
+                    'approvers': column.get('approvers', []),
+                    'approval_type': 'any'  # or 'all'
+                })
+                step_order += 1
+                
+        return workflow_steps
+    
+    def handle_board_automations(self, board):
+        """Convert board automations to Tallyfy rules"""
+        rules = []
+        
+        for automation in board.get('automations', []):
+            if automation['trigger'] == 'card_moved':
+                # Card movement automation
+                rule = {
+                    'type': 'step_completion',
+                    'condition': f"step_name == 'Exit {automation['from_column']}'",
+                    'action': 'auto_assign',
+                    'target': automation.get('assign_to')
+                }
+                rules.append(rule)
+            elif automation['trigger'] == 'due_date_approaching':
+                # Due date automation
+                rule = {
+                    'type': 'deadline_reminder',
+                    'before_hours': automation.get('hours_before', 24),
+                    'notify': automation.get('notify_users', [])
+                }
+                rules.append(rule)
+                
+        return rules
+```
+
+### App Transformation Complexity
+
+```python
+class AppTransformer:
+    """Transforms complex Kissflow apps to Tallyfy blueprints"""
+    
+    def transform_app(self, app):
+        """
+        Kissflow App: Multiple forms, views, workflows, and data tables
+        Tallyfy: Single blueprint with complex workflow
+        """
+        
+        # Analyze app complexity
+        complexity = {
+            'forms': len(app.get('forms', [])),
+            'workflows': len(app.get('workflows', [])),
+            'views': len(app.get('views', [])),
+            'tables': len(app.get('tables', [])),
+            'total_fields': sum(len(f.get('fields', [])) for f in app.get('forms', []))
+        }
+        
+        if complexity['forms'] > 3 or complexity['workflows'] > 1:
+            # Complex app - needs splitting
+            return self.split_complex_app(app)
+        else:
+            # Simple app - direct conversion
+            return self.simple_app_conversion(app)
+    
+    def split_complex_app(self, app):
+        """Split complex app into multiple blueprints"""
+        blueprints = []
+        
+        # Create main blueprint
+        main_blueprint = {
+            'name': app['name'],
+            'description': app.get('description', ''),
+            'category': 'Migrated Apps',
+            'steps': []
+        }
+        
+        # Each form becomes a step group
+        for form in app.get('forms', []):
+            step_group = self.form_to_step_group(form)
+            main_blueprint['steps'].extend(step_group)
+        
+        # Each workflow branch becomes a conditional path
+        for workflow in app.get('workflows', []):
+            if workflow.get('is_subprocess'):
+                # Create separate blueprint for subprocess
+                sub_blueprint = self.workflow_to_blueprint(workflow)
+                sub_blueprint['name'] = f"{app['name']} - {workflow['name']}"
+                blueprints.append(sub_blueprint)
+            else:
+                # Add to main blueprint
+                workflow_steps = self.workflow_to_steps(workflow)
+                main_blueprint['steps'].extend(workflow_steps)
+        
+        blueprints.insert(0, main_blueprint)
+        return blueprints
+```
+
+### Field Type Mapping Details
+
+```python
+class FieldTransformer:
+    """Maps 20+ Kissflow field types to Tallyfy"""
+    
+    def __init__(self):
+        self.field_map = {
+            # Simple mappings
+            'text': 'text',
+            'textarea': 'textarea',
+            'email': 'email',
+            'date': 'date',
+            'checkbox': 'radio',  # Yes/No
+            'dropdown': 'dropdown',
+            'radio': 'radio',
+            'file': 'file',
+            
+            # Complex mappings
+            'child_table': self.transform_child_table,
+            'formula': self.transform_formula,
+            'lookup': self.transform_lookup,
+            'remote_lookup': self.transform_remote_lookup,
+            'signature': self.transform_signature,
+            'geolocation': self.transform_geolocation,
+            'user': 'assignees_form',
+            'number': self.transform_number,
+            'currency': self.transform_currency,
+            'percentage': self.transform_percentage
+        }
+    
+    def transform_child_table(self, field):
+        """Child tables become Tallyfy table fields with limitations"""
+        return {
+            'type': 'table',
+            'name': field['name'],
+            'columns': [
+                {
+                    'name': col['name'],
+                    'type': 'text',  # Tables only support text columns
+                    'required': col.get('required', False)
+                }
+                for col in field.get('columns', [])[:10]  # Max 10 columns
+            ],
+            'max_rows': min(field.get('max_rows', 100), 100),  # Tallyfy limit
+            'warning': 'Complex validations and formulas not supported in table'
+        }
+    
+    def transform_formula(self, field):
+        """Formula fields become read-only text with warning"""
+        return {
+            'type': 'text',
+            'name': field['name'],
+            'readonly': True,
+            'default_value': f"[Formula: {field.get('formula', 'N/A')}]",
+            'warning': 'Formula calculations not supported - requires manual calculation'
+        }
+    
+    def transform_lookup(self, field):
+        """Dataset lookups become static dropdowns"""
+        # Fetch current dataset values
+        dataset_id = field.get('dataset_id')
+        values = self.fetch_dataset_values(dataset_id, field.get('display_field'))
+        
+        return {
+            'type': 'dropdown',
+            'name': field['name'],
+            'options': [
+                {'value': v['id'], 'label': v['display']}
+                for v in values[:100]  # Limit to 100 options
+            ],
+            'warning': 'Dynamic lookup converted to static dropdown - update manually'
+        }
+```
+
 ## 🔍 Validation & Reporting
 
 ### Generated Reports

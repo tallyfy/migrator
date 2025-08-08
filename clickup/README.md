@@ -264,6 +264,189 @@ ClickUp's flexible hierarchy doesn't directly map to Tallyfy's process-oriented 
 - **AI Strategy**: Groups related fields into logical forms
 - **User Impact**: More structured data entry
 
+### Hierarchy Flattening Strategy Implementation
+
+```python
+class HierarchyFlattener:
+    def __init__(self, max_depth=3):
+        self.max_depth = max_depth
+        self.flattening_rules = {
+            'space_to_category': True,
+            'folder_merge_threshold': 3,  # Merge if < 3 lists
+            'subtask_chain_limit': 5      # Convert deep subtasks to steps
+        }
+    
+    def flatten_clickup_hierarchy(self, space):
+        """Intelligent hierarchy flattening with business logic preservation"""
+        
+        flattened = {
+            'category': space['name'],
+            'blueprints': [],
+            'metadata': {}
+        }
+        
+        for folder in space.get('folders', []):
+            # Decision: Merge small folders or preserve as blueprint groups
+            if len(folder['lists']) < self.flattening_rules['folder_merge_threshold']:
+                # Merge folder's lists directly into category
+                for list_item in folder['lists']:
+                    blueprint = self.transform_list_to_blueprint(
+                        list_item, 
+                        prefix=f"{folder['name']} - "
+                    )
+                    flattened['blueprints'].append(blueprint)
+            else:
+                # Keep folder structure as blueprint grouping
+                for list_item in folder['lists']:
+                    blueprint = self.transform_list_to_blueprint(list_item)
+                    blueprint['group'] = folder['name']
+                    flattened['blueprints'].append(blueprint)
+        
+        # Handle folderless lists
+        for list_item in space.get('lists', []):
+            blueprint = self.transform_list_to_blueprint(list_item)
+            flattened['blueprints'].append(blueprint)
+            
+        return flattened
+    
+    def handle_deep_subtasks(self, task, depth=0):
+        """Convert deep subtask chains to sequential steps"""
+        
+        steps = []
+        
+        if depth >= self.flattening_rules['subtask_chain_limit']:
+            # Too deep - flatten remaining as single step with checklist
+            checklist_items = self.extract_all_subtasks(task)
+            steps.append({
+                'name': task['name'],
+                'type': 'checklist',
+                'items': checklist_items,
+                'metadata': {'original_depth': depth}
+            })
+        else:
+            # Convert task to step
+            steps.append({
+                'name': task['name'],
+                'description': task.get('description', ''),
+                'assignees': task.get('assignees', [])
+            })
+            
+            # Recursively process subtasks
+            for subtask in task.get('subtasks', []):
+                steps.extend(self.handle_deep_subtasks(subtask, depth + 1))
+                
+        return steps
+```
+
+### Custom Field Handling Implementation
+
+```python
+class CustomFieldMapper:
+    def __init__(self):
+        self.field_type_map = {
+            'text': 'text',
+            'number': 'text',  # With validation
+            'money': 'text',   # With currency format
+            'rating': 'dropdown',
+            'label': 'dropdown',
+            'tasks': 'dropdown',  # Reference field
+            'users': 'assignees_form',
+            'checkbox': 'radio',  # Yes/No
+            'date': 'date',
+            'drop_down': 'dropdown',
+            'email': 'email',
+            'phone': 'text',  # With pattern
+            'url': 'text',    # With URL validation
+            'progress': 'text',  # Percentage
+            'formula': 'text',   # Read-only
+            'relationship': 'dropdown',  # Reference
+            'location': 'text'   # Address
+        }
+    
+    def map_custom_field(self, clickup_field):
+        """Map ClickUp custom field to Tallyfy with all properties"""
+        
+        field_type = clickup_field['type']
+        tallyfy_type = self.field_type_map.get(field_type, 'text')
+        
+        tallyfy_field = {
+            'name': clickup_field['name'],
+            'type': tallyfy_type,
+            'required': clickup_field.get('required', False)
+        }
+        
+        # Type-specific handling
+        if field_type == 'number':
+            tallyfy_field['validation'] = 'numeric'
+            if clickup_field.get('number_format'):
+                tallyfy_field['format'] = clickup_field['number_format']
+                
+        elif field_type == 'money':
+            tallyfy_field['validation'] = 'numeric|min:0'
+            tallyfy_field['prefix'] = clickup_field.get('currency', '$')
+            
+        elif field_type == 'rating':
+            # Convert rating to dropdown with scale
+            max_rating = clickup_field.get('max_rating', 5)
+            tallyfy_field['options'] = [
+                {'value': str(i), 'label': '⭐' * i}
+                for i in range(1, max_rating + 1)
+            ]
+            
+        elif field_type in ['drop_down', 'label']:
+            # Map dropdown options
+            tallyfy_field['options'] = [
+                {
+                    'value': opt['id'],
+                    'label': opt['name'],
+                    'color': opt.get('color')
+                }
+                for opt in clickup_field.get('type_config', {}).get('options', [])
+            ]
+            
+        elif field_type == 'formula':
+            # Preserve formula as read-only text
+            tallyfy_field['readonly'] = True
+            tallyfy_field['default_value'] = f"Formula: {clickup_field.get('formula', 'N/A')}"
+            
+        elif field_type == 'relationship':
+            # Map relationships to reference dropdowns
+            tallyfy_field['reference_type'] = clickup_field.get('relationship_type')
+            tallyfy_field['reference_data'] = 'dynamic_load'
+            
+        return tallyfy_field
+```
+
+### Performance Metrics
+
+```python
+# Actual migration performance metrics
+CLICKUP_MIGRATION_METRICS = {
+    'api_limits': {
+        'rate_limit': 100,  # requests per minute
+        'burst_limit': 200,  # burst capacity
+        'retry_after': 60   # seconds on rate limit
+    },
+    'processing_rates': {
+        'spaces': '5-10 spaces/minute',
+        'lists': '20-30 lists/minute',
+        'tasks': '40-60 tasks/minute',
+        'custom_fields': '100-150 fields/minute'
+    },
+    'memory_usage': {
+        'per_task': '~2KB',
+        'per_custom_field': '~500B',
+        'per_attachment': '~1KB metadata'
+    },
+    'bottlenecks': {
+        'deep_hierarchies': 'Exponential API calls for subtasks',
+        'custom_fields': 'Multiple API calls per field type',
+        'view_data': 'Separate API call per view type',
+        'time_tracking': 'Paginated endpoints, slow retrieval'
+    }
+}
+```
+
 ## 📁 Data Mapping
 
 ### Object Mappings Summary

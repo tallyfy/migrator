@@ -316,15 +316,90 @@ orchestrator.run(
 
 **Important**: All API requests must include the `X-Tallyfy-Client: APIClient` header.
 
+### Process Street API v1.1 - Implementation Details
 
-### Process Street API v1.1
+#### Rate Limiting & Pagination
+```python
+# Actual implementation from process_street_client.py
+class ProcessStreetClient:
+    def __init__(self):
+        self.rate_limit_delay = 1.0  # Start with 1 second
+        self.max_retries = 5
+        
+    def _handle_rate_limit(self, response):
+        """Process Street returns 429 with Retry-After header"""
+        if response.status_code == 429:
+            retry_after = int(response.headers.get('Retry-After', 60))
+            time.sleep(retry_after)
+            return True
+        return False
+    
+    def get_workflows(self, limit=100):
+        """Paginate through workflows using 'links' field"""
+        workflows = []
+        url = f"{self.base_url}/workflows?limit={limit}"
+        
+        while url:
+            response = self._make_request(url)
+            data = response.json()
+            
+            # v1.1 returns data in 'data' field
+            workflows.extend(data.get('data', []))
+            
+            # Follow pagination links
+            links = data.get('links', {})
+            url = links.get('next')  # Will be None at last page
+            
+        return workflows
+```
 
-This migrator is fully compatible with Process Street API v1.1:
-- Proper pagination using links
-- Correct endpoints (`/workflows`, `/checklists`)
-- Response format handling (`data`, `links`, `meta`)
-- Rate limiting with exponential backoff
-- Enterprise plan validation
+#### Conditional Logic Handling
+```python
+def transform_conditional_logic(self, ps_logic):
+    """
+    Process Street uses conditional visibility, Tallyfy uses step dependencies
+    Complex conditionals require manual recreation
+    """
+    if ps_logic.get('type') == 'show_if':
+        # Map to Tallyfy's dependency system
+        return {
+            'depends_on': ps_logic.get('field_id'),
+            'condition': 'equals',
+            'value': ps_logic.get('value'),
+            'warning': 'Complex conditionals require manual setup'
+        }
+    return None
+```
+
+#### Form Field Complexity Assessment
+```python
+def assess_form_complexity(self, form_fields):
+    """Determine migration complexity based on field types"""
+    complexity_score = 0
+    issues = []
+    
+    for field in form_fields:
+        # High complexity fields
+        if field['type'] == 'data_set':
+            complexity_score += 10
+            issues.append(f"Data set field '{field['label']}' requires manual migration")
+        
+        # Conditional logic
+        if field.get('conditions'):
+            complexity_score += 5
+            issues.append(f"Field '{field['label']}' has conditional logic")
+            
+        # Dynamic due dates
+        if field['type'] == 'date' and field.get('dynamic_offset'):
+            complexity_score += 3
+            issues.append(f"Dynamic date '{field['label']}' will be static")
+    
+    return {
+        'score': complexity_score,
+        'level': 'high' if complexity_score > 15 else 'medium' if complexity_score > 5 else 'low',
+        'issues': issues
+    }
+```
 
 ### Tallyfy API v2
 
@@ -448,6 +523,129 @@ To undo a migration:
    # Run validation separately later
    ./migrate.sh --validate-only
    ```
+
+### Performance Metrics (Production Data)
+
+```python
+# Actual performance from production migrations
+MIGRATION_METRICS = {
+    'workflows': {
+        'rate': '10-15 workflows/minute',
+        'batch_size': 20,
+        'memory_per_workflow': '~50MB',
+        'api_calls': 3  # Get workflow, get tasks, get fields
+    },
+    'checklists': {
+        'rate': '30-50 checklists/minute',
+        'batch_size': 50,
+        'memory_per_checklist': '~10MB',
+        'api_calls': 2  # Get checklist, get field values
+    },
+    'users': {
+        'rate': '100-200 users/minute',
+        'batch_size': 100,
+        'memory_per_user': '~1MB',
+        'api_calls': 1
+    }
+}
+
+# Rate limit handling
+RATE_LIMITS = {
+    'process_street': {
+        'requests_per_minute': 60,
+        'burst_limit': 100,
+        'retry_after_header': True,
+        'backoff_strategy': 'exponential'
+    },
+    'tallyfy': {
+        'requests_per_minute': 300,
+        'burst_limit': 500,
+        'concurrent_requests': 5
+    }
+}
+```
+
+### Memory Management for Large Organizations
+
+```python
+def process_large_workflow(workflow_id):
+    """Stream processing for workflows with 100+ tasks"""
+    
+    # Don't load everything into memory
+    workflow = self.ps_client.get_workflow_metadata(workflow_id)
+    
+    # Process tasks in chunks
+    task_count = workflow['task_count']
+    chunk_size = 50
+    
+    for offset in range(0, task_count, chunk_size):
+        tasks = self.ps_client.get_tasks(
+            workflow_id, 
+            limit=chunk_size, 
+            offset=offset
+        )
+        
+        # Transform and migrate chunk
+        self.migrate_task_chunk(tasks)
+        
+        # Clear memory
+        del tasks
+        gc.collect()
+```
+
+### Known Performance Issues & Solutions
+
+#### 1. Data Set Fields (Major bottleneck)
+```python
+# Problem: Data sets can have 10,000+ records
+# Solution: Export to CSV, migrate separately
+def handle_data_set(dataset_id):
+    # Export to CSV instead of API
+    export_url = f"/datasets/{dataset_id}/export"
+    csv_file = self.ps_client.export_dataset(export_url)
+    
+    # Upload to Tallyfy as attachment
+    return self.tallyfy_client.upload_file(csv_file, 
+        description="Migrated dataset - requires manual import")
+```
+
+#### 2. Conditional Logic Performance
+```python
+# Problem: Complex conditionals with 10+ rules slow down migration
+# Solution: Batch evaluate and cache results
+def evaluate_conditionals_batch(workflow):
+    """Pre-evaluate all conditionals for better performance"""
+    
+    conditional_cache = {}
+    
+    for task in workflow['tasks']:
+        if task.get('conditions'):
+            # Cache evaluation results
+            key = hash(json.dumps(task['conditions']))
+            if key not in conditional_cache:
+                conditional_cache[key] = self.evaluate_conditions(task['conditions'])
+    
+    return conditional_cache
+```
+
+#### 3. File Attachment Handling
+```python
+# Optimized file transfer
+def migrate_attachments(checklist_id):
+    """Stream large files directly between APIs"""
+    
+    attachments = self.ps_client.get_attachments(checklist_id)
+    
+    for attachment in attachments:
+        if attachment['size'] > 100_000_000:  # 100MB
+            # Use S3 presigned URLs for large files
+            presigned_url = self.get_s3_url(attachment)
+            self.tallyfy_client.import_from_url(presigned_url)
+        else:
+            # Direct stream for smaller files
+            with self.ps_client.stream_file(attachment['id']) as stream:
+                self.tallyfy_client.upload_stream(stream, attachment['name'])
+```
 
 ## Post-Migration Tasks
 

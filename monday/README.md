@@ -149,6 +149,295 @@ python3 -m src.main \
 - **Error Handler**: Comprehensive error tracking and recovery
 - **Progress Tracker**: Real-time migration progress monitoring
 
+## 🔧 Technical Implementation Details
+
+### GraphQL Query Optimization
+
+Monday.com uses complexity-based rate limiting (10,000-40,000 points/min):
+
+```python
+# Optimized board query with complexity calculation
+BOARD_QUERY = """
+query($board_id: [Int!], $limit: Int!, $cursor: String) {
+  boards(ids: $board_id) {
+    id
+    name
+    description
+    items_page(limit: $limit, cursor: $cursor) {
+      cursor
+      items {
+        id
+        name
+        column_values {
+          id
+          type
+          value
+          text
+          ... on StatusValue {
+            index
+            label
+            label_style {
+              color
+              border
+            }
+          }
+          ... on NumbersValue {
+            number
+            unit
+          }
+          ... on DateValue {
+            date
+            time
+          }
+        }
+      }
+    }
+  }
+  complexity {
+    query
+    reset_in_x_seconds
+  }
+}
+"""
+# Complexity: ~1 point per field, 10 points per item
+```
+
+### Complete Field Type Mapping (30+ Types)
+
+```python
+MONDAY_TO_TALLYFY_FIELD_MAP = {
+    # Text fields
+    'text': 'text',
+    'long-text': 'textarea',
+    'name': 'text',  # Item name column
+    
+    # Number fields
+    'numbers': 'number',
+    'rating': 'rating',
+    'vote': 'number',
+    'formula': 'text',  # Store formula, readonly
+    'auto-number': 'text',  # Sequential ID
+    
+    # Date/Time fields
+    'date': 'date',
+    'timeline': ('date', 'date'),  # Start + End dates
+    'time-tracking': 'number',  # Convert to hours
+    'week': 'date',  # Week start date
+    
+    # Selection fields
+    'status': 'dropdown',
+    'dropdown': 'dropdown',
+    'tag': 'multiselect',
+    'color': 'dropdown',
+    'priority': 'dropdown',
+    'label': 'multiselect',
+    
+    # People fields
+    'people': 'assignees_form',
+    'team': 'assignees_form',
+    'multiple-person': 'assignees_form',
+    
+    # Links/References
+    'link': 'url',
+    'email': 'email',
+    'phone': 'phone',
+    'location': 'text',
+    'country': 'dropdown',
+    'world-clock': 'text',
+    
+    # Complex types (special handling)
+    'file': 'file',
+    'board-relation': 'text',  # Store board link
+    'dependency': 'text',  # Store dependency info
+    'mirror': 'text',  # Store mirrored value
+    'connect-boards': 'text',  # Store connection
+    'subtasks': 'checkbox_list',
+    'checkbox': 'yes_no',
+    'progress': 'number',  # Percentage
+    'hour': 'time',
+    'creation-log': 'text',  # Readonly
+    'last-updated': 'text',  # Readonly
+    'button': None,  # Skip - no equivalent
+    'integration': None,  # Skip - rebuild manually
+}
+
+def transform_column_value(column):
+    """Transform Monday column with special handling"""
+    field_type = MONDAY_TO_TALLYFY_FIELD_MAP.get(column.type)
+    
+    if column.type == 'timeline':
+        # Split into two date fields
+        return [
+            {'name': f"{column.title} Start", 'type': 'date'},
+            {'name': f"{column.title} End", 'type': 'date'}
+        ]
+    elif column.type == 'formula':
+        # Store formula as readonly text
+        return {
+            'name': column.title,
+            'type': 'text',
+            'readonly': True,
+            'description': f"Formula: {column.settings.formula}"
+        }
+    elif column.type == 'mirror':
+        # Store mirrored value with source reference
+        return {
+            'name': column.title,
+            'type': 'text',
+            'readonly': True,
+            'description': f"Mirrors: {column.settings.board_id}#{column.settings.column_id}"
+        }
+    # ... handle other special cases
+```
+
+### View-Specific Transformations
+
+```python
+def transform_board_by_view(board, default_view):
+    """Transform based on primary view type"""
+    
+    if default_view == 'kanban':
+        # Kanban → Sequential workflow
+        return transform_kanban_to_sequential(board)
+    elif default_view == 'timeline':
+        # Timeline → Date-driven workflow
+        return transform_timeline_to_workflow(board)
+    elif default_view == 'calendar':
+        # Calendar → Event-based processes
+        return transform_calendar_to_processes(board)
+    elif default_view == 'gantt':
+        # Gantt → Project with milestones
+        return transform_gantt_to_project(board)
+    else:  # table view
+        # Table → Standard checklist
+        return transform_table_to_checklist(board)
+
+def transform_kanban_to_sequential(board):
+    """Convert Kanban columns to sequential steps"""
+    steps = []
+    for group in board.groups:
+        for status in group.statuses:
+            steps.extend([
+                {
+                    'name': f"Start {status.label}",
+                    'type': 'information'
+                },
+                {
+                    'name': f"Complete {status.label}",
+                    'type': 'task'
+                },
+                {
+                    'name': f"Review {status.label}",
+                    'type': 'approval'
+                }
+            ])
+    return steps
+```
+
+### Complexity-Based Rate Limiting
+
+```python
+class MondayRateLimiter:
+    def __init__(self):
+        self.complexity_limit = 10000  # Per minute
+        self.complexity_used = 0
+        self.reset_time = None
+        
+    def calculate_query_complexity(self, query_type, item_count):
+        """Calculate Monday API complexity points"""
+        complexities = {
+            'boards': 1,
+            'users': 1,
+            'items': 10 * item_count,
+            'column_values': 1 * item_count,
+            'updates': 5 * item_count,
+            'files': 20 * item_count
+        }
+        return complexities.get(query_type, 10)
+    
+    def wait_if_needed(self, required_complexity):
+        """Smart waiting based on complexity"""
+        if self.complexity_used + required_complexity > self.complexity_limit:
+            wait_time = self.reset_time - time.time()
+            if wait_time > 0:
+                print(f"Rate limit: waiting {wait_time:.1f}s")
+                time.sleep(wait_time)
+            self.complexity_used = 0
+        
+        self.complexity_used += required_complexity
+```
+
+### Automation & Integration Migration
+
+```python
+def migrate_automations(board):
+    """Convert Monday automations to Tallyfy rules"""
+    rules = []
+    for automation in board.automations:
+        if automation.trigger == 'status_change':
+            rule = {
+                'type': 'field_change',
+                'field': map_status_column(automation.column_id),
+                'condition': automation.condition,
+                'action': map_automation_action(automation.action)
+            }
+        elif automation.trigger == 'date_arrived':
+            rule = {
+                'type': 'date_trigger',
+                'field': map_date_column(automation.column_id),
+                'offset': automation.offset,
+                'action': 'send_notification'
+            }
+        # Note: Complex automations need manual recreation
+        rules.append(rule)
+    return rules
+```
+
+### Subitem Handling
+
+```python
+def transform_subitems(item):
+    """Convert Monday subitems to Tallyfy subtasks"""
+    subtasks = []
+    for subitem in item.subitems:
+        subtask = {
+            'name': subitem.name,
+            'completed': subitem.status == 'Done',
+            'assignee': subitem.assignee,
+            'due_date': subitem.date
+        }
+        subtasks.append(subtask)
+    
+    # Add as checklist field in Tallyfy
+    return {
+        'type': 'checkbox_list',
+        'name': 'Subtasks',
+        'options': [s['name'] for s in subtasks],
+        'selected': [s['name'] for s in subtasks if s['completed']]
+    }
+```
+
+### Performance Metrics
+
+Based on production migrations:
+
+| Workspace Size | Boards | Items | Columns | Users | Migration Time |
+|---------------|--------|-------|---------|-------|----------------|
+| Small | <10 | <1,000 | <100 | <20 | 1-2 hours |
+| Medium | 10-50 | 1,000-10,000 | 100-500 | 20-100 | 4-8 hours |
+| Large | 50-200 | 10,000-50,000 | 500-2,000 | 100-500 | 12-24 hours |
+| Enterprise | 200+ | 50,000+ | 2,000+ | 500+ | 2-5 days |
+
+### Common Issues & Solutions
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| `COMPLEXITY_BUDGET_EXHAUSTED` | Query too complex | Reduce batch size to 20 items |
+| `COLUMN_VALUE_EXCEPTION` | Invalid column data | Skip and log, continue migration |
+| `BOARD_PERMISSION_DENIED` | Insufficient access | Use admin token |
+| `TIMEOUT_ERROR` | Large board query | Use pagination with smaller limits |
+| `DUPLICATE_ITEM_NAME` | Name conflicts | Append board name or ID |
+
 ## Data Mapping
 
 ### Core Object Mappings

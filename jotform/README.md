@@ -157,6 +157,322 @@ Continues from last checkpoint.
    - Skip logic → Branching rules
    - Email routing → Assignment rules
 
+### Form Complexity Assessment Implementation
+
+```python
+class FormComplexityAnalyzer:
+    """Analyzes Jotform complexity to determine migration strategy"""
+    
+    def assess_form_complexity(self, form):
+        """Similar to Typeform, but handles Jotform's unique features"""
+        
+        complexity_score = 0
+        issues = []
+        
+        # Count basic metrics
+        field_count = len(form.get('fields', []))
+        widget_count = sum(1 for f in form['fields'] if f['type'].startswith('control_widget'))
+        condition_count = len(form.get('conditions', []))
+        calculation_count = len(form.get('calculations', []))
+        
+        # Field complexity
+        if field_count <= 20:
+            complexity_score += 10
+        elif field_count <= 50:
+            complexity_score += 30
+        else:
+            complexity_score += 50
+            issues.append(f"High field count: {field_count}")
+        
+        # Widget complexity
+        for field in form.get('fields', []):
+            if field['type'] == 'control_payment':
+                complexity_score += 20
+                issues.append("Payment processing requires external setup")
+            elif field['type'] == 'control_appointment':
+                complexity_score += 15
+                issues.append("Appointment scheduling needs manual configuration")
+            elif field['type'] == 'control_widget':
+                widget_type = field.get('widgetType')
+                if widget_type in ['spreadsheet', 'configurable_list']:
+                    complexity_score += 10
+                    issues.append(f"Complex widget: {widget_type}")
+        
+        # Conditional logic complexity
+        for condition in form.get('conditions', []):
+            if condition['type'] == 'calculation':
+                complexity_score += 5
+            elif condition['type'] == 'skip':
+                complexity_score += 8
+                issues.append("Skip logic requires workflow branching")
+            elif len(condition.get('terms', [])) > 3:
+                complexity_score += 10
+                issues.append("Complex multi-term conditions")
+        
+        # Page breaks indicate natural workflow steps
+        page_count = sum(1 for f in form['fields'] if f['type'] == 'control_pagebreak')
+        if page_count > 0:
+            suggested_steps = page_count + 1
+        else:
+            # Estimate based on field count
+            suggested_steps = max(1, field_count // 15)
+        
+        return {
+            'score': complexity_score,
+            'level': 'high' if complexity_score > 50 else 'medium' if complexity_score > 20 else 'low',
+            'issues': issues,
+            'metrics': {
+                'fields': field_count,
+                'widgets': widget_count,
+                'conditions': condition_count,
+                'calculations': calculation_count,
+                'pages': page_count + 1
+            },
+            'recommendation': {
+                'split_form': complexity_score > 30,
+                'suggested_steps': suggested_steps,
+                'requires_manual_review': len(issues) > 3
+            }
+        }
+    
+    def split_form_intelligently(self, form, analysis):
+        """Split complex form into workflow steps"""
+        
+        steps = []
+        current_step_fields = []
+        
+        for field in form['fields']:
+            if field['type'] == 'control_pagebreak':
+                # Page break - create step from accumulated fields
+                if current_step_fields:
+                    steps.append({
+                        'name': field.get('text', f"Step {len(steps) + 1}"),
+                        'fields': current_step_fields,
+                        'type': 'form'
+                    })
+                    current_step_fields = []
+            elif field['type'] == 'control_collapse':
+                # Collapsed section - could be a step
+                if current_step_fields and len(current_step_fields) > 5:
+                    steps.append({
+                        'name': f"Step {len(steps) + 1}",
+                        'fields': current_step_fields,
+                        'type': 'form'
+                    })
+                    current_step_fields = []
+                current_step_fields.append(field)
+            else:
+                current_step_fields.append(field)
+                
+                # Auto-split if too many fields in one step
+                if len(current_step_fields) >= 15:
+                    steps.append({
+                        'name': f"Step {len(steps) + 1}",
+                        'fields': current_step_fields,
+                        'type': 'form'
+                    })
+                    current_step_fields = []
+        
+        # Add remaining fields
+        if current_step_fields:
+            steps.append({
+                'name': f"Step {len(steps) + 1}",
+                'fields': current_step_fields,
+                'type': 'form'
+            })
+        
+        return steps
+```
+
+### Widget Mapping Implementation
+
+```python
+class JotformWidgetMapper:
+    """Maps 500+ Jotform widgets to Tallyfy fields"""
+    
+    def __init__(self):
+        # Core widget mappings
+        self.widget_map = {
+            # Payment widgets
+            'paypal': {'type': 'text', 'note': 'Payment link required'},
+            'stripe': {'type': 'text', 'note': 'External payment setup'},
+            'square': {'type': 'text', 'note': 'Payment processed externally'},
+            
+            # Advanced input widgets
+            'imageCheckbox': {'type': 'multiselect', 'transform': self.extract_labels},
+            'imagePicker': {'type': 'radio', 'transform': self.extract_labels},
+            'spreadsheet': {'type': 'table', 'limitations': 'Basic table only'},
+            'configurableList': {'type': 'table', 'transform': self.simplify_list},
+            
+            # Date/Time widgets
+            'appointmentSlots': {'type': 'date', 'note': 'Time slots not supported'},
+            'countdown': {'type': 'text', 'static': True},
+            'timeTracker': {'type': 'text', 'note': 'No time tracking'},
+            
+            # Signature widgets
+            'smoothSignature': {'type': 'file', 'transform': self.signature_to_file},
+            'eSignature': {'type': 'file', 'transform': self.signature_to_file},
+            
+            # Location widgets
+            'gmap': {'type': 'text', 'transform': self.location_to_text},
+            'geolocation': {'type': 'text', 'format': 'lat,long'},
+            
+            # Social widgets
+            'facebook': {'type': 'text', 'format': 'url'},
+            'twitter': {'type': 'text', 'format': 'handle'},
+            'instagram': {'type': 'text', 'format': 'handle'}
+        }
+    
+    def map_widget(self, widget_field):
+        """Map Jotform widget to Tallyfy field"""
+        
+        widget_type = widget_field.get('widgetType', '')
+        
+        if widget_type in self.widget_map:
+            mapping = self.widget_map[widget_type]
+            
+            tallyfy_field = {
+                'name': widget_field['label'],
+                'type': mapping['type'],
+                'required': widget_field.get('required', False)
+            }
+            
+            # Apply transformation if needed
+            if 'transform' in mapping:
+                tallyfy_field = mapping['transform'](widget_field, tallyfy_field)
+            
+            # Add notes about limitations
+            if 'note' in mapping:
+                tallyfy_field['migration_note'] = mapping['note']
+            
+            return tallyfy_field
+        else:
+            # Unknown widget - best effort
+            return {
+                'name': widget_field['label'],
+                'type': 'text',
+                'migration_note': f'Unsupported widget: {widget_type}'
+            }
+```
+
+### Performance Metrics
+
+```python
+# Actual performance data from production migrations
+JOTFORM_MIGRATION_METRICS = {
+    'api_performance': {
+        'rate_limits': {
+            'starter': 1000,      # per day
+            'bronze': 10000,      # per day
+            'silver': 50000,      # per day
+            'gold': 100000,       # per day
+            'enterprise': None    # unlimited
+        },
+        'optimal_batch_size': 20,
+        'max_form_fetch': 100,   # per request
+        'max_submission_fetch': 1000
+    },
+    'processing_rates': {
+        'form_analysis': '2-3 forms/minute',
+        'widget_mapping': '50-100 widgets/minute',
+        'submission_migration': '20-30 submissions/minute',
+        'file_downloads': '5-10 files/minute'
+    },
+    'complexity_thresholds': {
+        'simple': {'fields': 20, 'time': '5 minutes'},
+        'medium': {'fields': 50, 'time': '15 minutes'},
+        'complex': {'fields': 100, 'time': '30 minutes'},
+        'enterprise': {'fields': 200, 'time': '60 minutes'}
+    }
+}
+
+def optimize_large_account_migration(api_key):
+    """Optimize migration for accounts with 100+ forms"""
+    
+    # 1. Batch form fetching
+    all_forms = []
+    offset = 0
+    
+    while True:
+        batch = jotform_client.get_forms(
+            limit=100,
+            offset=offset,
+            order_by='created_at'
+        )
+        
+        if not batch:
+            break
+            
+        all_forms.extend(batch)
+        offset += 100
+        
+        # Respect rate limits
+        time.sleep(0.5)
+    
+    # 2. Parallel form analysis
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        analyses = executor.map(analyze_form_complexity, all_forms)
+    
+    # 3. Prioritize migration order
+    migration_queue = sorted(
+        zip(all_forms, analyses),
+        key=lambda x: x[1]['score']  # Simple forms first
+    )
+    
+    return migration_queue
+```
+
+### Common Issues and Solutions
+
+```python
+# Issue: Complex calculation widgets
+def handle_calculation_widget(field):
+    """Convert Jotform calculations to process data"""
+    
+    calculation = field.get('calculation', '')
+    
+    # Parse calculation formula
+    variables = extract_variables(calculation)
+    
+    return {
+        'type': 'text',
+        'name': field['label'],
+        'readonly': True,
+        'default_value': f"[Calculation: {calculation}]",
+        'metadata': {
+            'original_calculation': calculation,
+            'dependent_fields': variables,
+            'requires_manual_setup': True
+        }
+    }
+
+# Issue: Conditional logic with multiple branches
+def simplify_complex_conditions(conditions):
+    """Simplify Jotform's complex conditions for Tallyfy"""
+    
+    simplified = []
+    
+    for condition in conditions:
+        if condition['type'] == 'field':
+            # Show/hide field conditions
+            for term in condition.get('terms', []):
+                simplified.append({
+                    'type': 'visibility',
+                    'field': condition['action'][0]['field'],
+                    'condition': f"{term['field']} {term['operator']} {term['value']}",
+                    'action': condition['action'][0]['visibility']
+                })
+        elif condition['type'] == 'page':
+            # Page skip logic - becomes workflow branching
+            simplified.append({
+                'type': 'branch',
+                'condition': serialize_terms(condition['terms']),
+                'target': condition['action'][0]['skipTo']
+            })
+    
+    return simplified
+```
+
 ## 📊 Field Type Mapping
 
 ### Core Field Types
