@@ -1,0 +1,254 @@
+# Migrator - Cursor AI Rules
+
+## Repository Overview
+Production-ready migration tools for migrating from 15+ workflow/BPM/forms vendors to Tallyfy. Each migrator is 100% independent with AI-powered decision capabilities for handling complex transformations.
+
+## Critical Context Loading Requirements
+- ALWAYS read ../CLAUDE.md first (root guidelines)
+- THEN read ./CLAUDE.md for repo-specific rules
+- Use web search proactively for vendor API documentation
+
+## System Architecture
+```
+┌─────────────────────────────────────┐
+│     Orchestration Layer (main.py)   │  5-phase migration controller
+├─────────────────────────────────────┤
+│    Transformation Layer             │  Field, template, user transformers
+├─────────────────────────────────────┤
+│         API Layer                   │  Vendor & Tallyfy clients
+├─────────────────────────────────────┤
+│        Utility Layer                │  Checkpoint, validation, logging
+├─────────────────────────────────────┤
+│    AI Augmentation Layer           │  Claude/GPT with fallbacks
+└─────────────────────────────────────┘
+```
+
+## CRITICAL: Independence Rule
+**EACH MIGRATOR IS COMPLETELY INDEPENDENT**
+- NEVER mention other vendors in README or documentation
+- NEVER add "see also" references to other migrators
+- NEVER include "coming soon" lists
+- Treat each migrator as if it's the only one
+- Each must be fully self-contained
+
+## Required Directory Structure
+```
+/migrator/[vendor-name]/
+├── src/
+│   ├── api/
+│   │   ├── [vendor]_client.py
+│   │   ├── tallyfy_client.py
+│   │   └── ai_client.py
+│   ├── transformers/
+│   │   ├── field_transformer.py
+│   │   ├── template_transformer.py
+│   │   ├── user_transformer.py
+│   │   └── ai_decision_maker.py
+│   ├── prompts/
+│   │   ├── assess_form_complexity.txt
+│   │   ├── map_ambiguous_field.txt
+│   │   └── determine_workflow_steps.txt
+│   ├── utils/
+│   │   ├── id_mapper.py
+│   │   ├── checkpoint_manager.py
+│   │   └── error_handler.py
+│   └── main.py
+├── tests/
+├── migrate.sh
+├── .env.example
+├── README.md (18 sections)
+└── OBJECT_MAPPING.md
+```
+
+## 5-Phase Migration Pattern (MANDATORY)
+All migrators MUST follow this pattern:
+
+### Phase 1: Discovery
+- Fetch all data from source
+- Assess complexity with AI
+- Generate migration plan
+
+### Phase 2: Users
+- Migrate users and teams
+- Map roles and permissions
+- Establish ID mappings
+
+### Phase 3: Templates/Forms
+- Transform templates/workflows
+- Use AI for complex decisions
+- Handle paradigm shifts
+
+### Phase 4: Instances
+- Migrate running instances
+- Use AI for ambiguous mappings
+- Preserve relationships
+
+### Phase 5: Validation
+- Verify data integrity
+- Check ID mappings
+- Generate report
+
+## AI Integration Requirements
+**MANDATORY AI capabilities:**
+- Customer provides Anthropic API key
+- AI enhances difficult decisions
+- Prompts in editable prompts/ folder
+- JSON responses only
+- ALWAYS provide fallbacks
+
+**USE AI FOR:**
+- Form complexity assessment
+- Ambiguous field determination
+- Workflow step generation
+- Conditional logic interpretation
+- Paradigm shift transformations
+
+**DON'T USE AI FOR:**
+- Direct 1:1 mappings
+- Simple user migration
+- Basic transformations
+- API calls
+- Error handling
+
+## Paradigm Shift Patterns
+
+### Kanban → Sequential
+- Each column becomes 3 steps
+- Entry → Work → Exit pattern
+- Parallel becomes sequential
+- Document transformation clearly
+
+### Forms → Workflows
+- ≤20 fields: Single kick-off
+- 21-50 fields: Multi-step workflow
+- >50 fields: AI-analyzed complex
+- Preserve conditional logic
+
+### Hybrid Views → Sequential
+- Detect primary view type
+- Apply view-specific transform
+- Document paradigm changes
+- AI helps with mappings
+
+## Required README Sections (ALL 18)
+1. Requirements (include AI key)
+2. Installation
+3. Configuration
+4. Quick Start
+5. Architecture
+6. AI-Powered Features
+7. Data Mapping
+8. API Integration
+9. Features
+10. Usage Examples
+11. Paradigm Shifts
+12. Limitations
+13. Migration Process
+14. Error Handling
+15. Performance
+16. Troubleshooting
+17. Best Practices
+18. Support
+
+## Field Mapping Standards
+Common transformations:
+- Timeline → Date(start) + Date(end)
+- Mirror → Short Text (readonly)
+- Formula → Short Text with calculation
+- Complex → AI decision with fallback
+- Unknown → Short text with validation
+
+## Performance Guidelines
+**With AI:**
+- Haiku: ~100-200 decisions/min
+- Sonnet: ~50-100 decisions/min
+- Cache AI decisions
+- Batch similar decisions
+
+**Without AI:**
+- Deterministic fallbacks
+- Heuristic decisions
+- Manual review flags
+
+## Batch Processing Sizes
+```python
+BATCH_SIZES = {
+    'users': 100,      # Light objects
+    'templates': 50,   # Medium complexity
+    'instances': 25,   # Heavy with data
+    'attachments': 10  # Large files
+}
+```
+
+## Error Handling Requirements
+- Log AI decisions with confidence
+- Flag low-confidence mappings
+- Continue without AI if unavailable
+- Clear error messages
+- Support checkpoint/resume
+- Exponential backoff for rate limits
+
+## Testing Requirements
+MUST test:
+- AI availability detection
+- Fallback functionality
+- Field mapping accuracy
+- Paradigm shift handling
+- Checkpoint/resume
+- Rate limit recovery
+- Both AI and non-AI paths
+
+## Development Workflow
+1. Research vendor API thoroughly
+2. Identify AI decision points
+3. Implement with fallbacks
+4. Test comprehensively
+5. Document all 18 sections
+
+## Common Patterns
+```python
+# Form complexity assessment
+if ai_enabled:
+    complexity = ai.assess_form_complexity(form)
+    if complexity['strategy'] == 'simple_kickoff':
+        return transform_to_kickoff(form)
+else:
+    # Fallback heuristics
+    if len(form.fields) <= 20:
+        return transform_to_kickoff(form)
+```
+
+## Production Ready Migrators
+- Process Street: Complete with AI
+- Pipefy: GraphQL, Kanban shift
+- Asana: Hybrid views, custom fields
+- Kissflow: Multi-module platform
+- Monday.com: 30+ field types
+- RocketLane: Project management
+
+## Code Quality Standards
+- Type hints for all functions
+- Docstrings with examples
+- Error handling with context
+- Logging at appropriate levels
+- PEP 8 compliance
+- Atomic commits
+- PR template compliance
+
+## Security Requirements
+- Store keys in .env (never commit)
+- Support OAuth2 and API keys
+- Validate credentials first
+- Clear tokens after completion
+- Log minimal PII
+- Sanitize logs before sharing
+
+## Success Metrics
+- ✅ Works without AI (fallbacks)
+- ✅ AI improves quality
+- ✅ Clear paradigm documentation
+- ✅ Comprehensive mappings
+- ✅ Production error handling
+- ✅ Resume capability
+- ✅ <2% data loss rate
+- ✅ Self-service migration
