@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+             xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+             id="Definitions_1"
+             targetNamespace="http://example.org/order-process">
+
+  <collaboration id="Collaboration_OrderProcess">
+    <participant id="Pool_Sales" name="Sales Department" processRef="Process_OrderHandling"/>
+    <participant id="Pool_Warehouse" name="Warehouse" processRef="Process_Fulfillment"/>
+    <messageFlow id="MessageFlow_1" sourceRef="Task_SendOrder" targetRef="Event_ReceiveOrder"/>
+  </collaboration>
+
+  <process id="Process_OrderHandling" name="Order Handling Process" isExecutable="true">
+    
+    <!-- Lanes for different roles -->
+    <laneSet>
+      <lane id="Lane_SalesRep" name="Sales Representative">
+        <flowNodeRef>StartEvent_NewOrder</flowNodeRef>
+        <flowNodeRef>Task_ReviewOrder</flowNodeRef>
+        <flowNodeRef>Gateway_OrderValue</flowNodeRef>
+      </lane>
+      <lane id="Lane_Manager" name="Sales Manager">
+        <flowNodeRef>Task_ApproveOrder</flowNodeRef>
+      </lane>
+      <lane id="Lane_System" name="System">
+        <flowNodeRef>Task_ProcessPayment</flowNodeRef>
+        <flowNodeRef>Task_SendOrder</flowNodeRef>
+        <flowNodeRef>EndEvent_OrderComplete</flowNodeRef>
+      </lane>
+    </laneSet>
+
+    <!-- Start Event -->
+    <startEvent id="StartEvent_NewOrder" name="New Order Received">
+      <outgoing>Flow_1</outgoing>
+    </startEvent>
+
+    <!-- User Task with Form -->
+    <userTask id="Task_ReviewOrder" name="Review Order Details" camunda:assignee="sales_rep">
+      <incoming>Flow_1</incoming>
+      <outgoing>Flow_2</outgoing>
+      <extensionElements>
+        <camunda:formData>
+          <camunda:formField id="customer_name" label="Customer Name" type="string" required="true"/>
+          <camunda:formField id="order_value" label="Order Value" type="long" required="true"/>
+          <camunda:formField id="priority" label="Priority" type="enum">
+            <camunda:value id="low" name="Low"/>
+            <camunda:value id="medium" name="Medium"/>
+            <camunda:value id="high" name="High"/>
+          </camunda:formField>
+        </camunda:formData>
+      </extensionElements>
+    </userTask>
+
+    <!-- Exclusive Gateway -->
+    <exclusiveGateway id="Gateway_OrderValue" name="Order Value Check">
+      <incoming>Flow_2</incoming>
+      <outgoing>Flow_HighValue</outgoing>
+      <outgoing>Flow_LowValue</outgoing>
+    </exclusiveGateway>
+
+    <!-- Approval Task -->
+    <userTask id="Task_ApproveOrder" name="Approve High Value Order" camunda:candidateGroups="managers">
+      <incoming>Flow_HighValue</incoming>
+      <outgoing>Flow_3</outgoing>
+    </userTask>
+
+    <!-- Service Tasks -->
+    <serviceTask id="Task_ProcessPayment" name="Process Payment" camunda:type="external" camunda:topic="payment">
+      <incoming>Flow_LowValue</incoming>
+      <incoming>Flow_3</incoming>
+      <outgoing>Flow_4</outgoing>
+    </serviceTask>
+
+    <sendTask id="Task_SendOrder" name="Send to Warehouse">
+      <incoming>Flow_4</incoming>
+      <outgoing>Flow_5</outgoing>
+    </sendTask>
+
+    <!-- End Event -->
+    <endEvent id="EndEvent_OrderComplete" name="Order Processed">
+      <incoming>Flow_5</incoming>
+    </endEvent>
+
+    <!-- Sequence Flows -->
+    <sequenceFlow id="Flow_1" sourceRef="StartEvent_NewOrder" targetRef="Task_ReviewOrder"/>
+    <sequenceFlow id="Flow_2" sourceRef="Task_ReviewOrder" targetRef="Gateway_OrderValue"/>
+    
+    <sequenceFlow id="Flow_HighValue" name="Value &gt; $1000" sourceRef="Gateway_OrderValue" targetRef="Task_ApproveOrder">
+      <conditionExpression>${order_value &gt; 1000}</conditionExpression>
+    </sequenceFlow>
+    
+    <sequenceFlow id="Flow_LowValue" name="Value &lt;= $1000" sourceRef="Gateway_OrderValue" targetRef="Task_ProcessPayment">
+      <conditionExpression>${order_value &lt;= 1000}</conditionExpression>
+    </sequenceFlow>
+    
+    <sequenceFlow id="Flow_3" sourceRef="Task_ApproveOrder" targetRef="Task_ProcessPayment"/>
+    <sequenceFlow id="Flow_4" sourceRef="Task_ProcessPayment" targetRef="Task_SendOrder"/>
+    <sequenceFlow id="Flow_5" sourceRef="Task_SendOrder" targetRef="EndEvent_OrderComplete"/>
+
+  </process>
+
+  <!-- Warehouse Process -->
+  <process id="Process_Fulfillment" name="Order Fulfillment">
+    
+    <startEvent id="Event_ReceiveOrder" name="Order Received">
+      <messageEventDefinition messageRef="Message_Order"/>
+      <outgoing>Flow_W1</outgoing>
+    </startEvent>
+
+    <!-- Parallel Gateway for simultaneous tasks -->
+    <parallelGateway id="Gateway_Split" name="Start Fulfillment">
+      <incoming>Flow_W1</incoming>
+      <outgoing>Flow_W2</outgoing>
+      <outgoing>Flow_W3</outgoing>
+    </parallelGateway>
+
+    <userTask id="Task_PickItems" name="Pick Items">
+      <incoming>Flow_W2</incoming>
+      <outgoing>Flow_W4</outgoing>
+    </userTask>
+
+    <userTask id="Task_PrepareShipping" name="Prepare Shipping">
+      <incoming>Flow_W3</incoming>
+      <outgoing>Flow_W5</outgoing>
+    </userTask>
+
+    <!-- Parallel Gateway Join -->
+    <parallelGateway id="Gateway_Join" name="Ready to Ship">
+      <incoming>Flow_W4</incoming>
+      <incoming>Flow_W5</incoming>
+      <outgoing>Flow_W6</outgoing>
+    </parallelGateway>
+
+    <userTask id="Task_ShipOrder" name="Ship Order">
+      <incoming>Flow_W6</incoming>
+      <outgoing>Flow_W7</outgoing>
+    </userTask>
+
+    <endEvent id="EndEvent_Shipped" name="Order Shipped">
+      <incoming>Flow_W7</incoming>
+    </endEvent>
+
+    <!-- Warehouse Sequence Flows -->
+    <sequenceFlow id="Flow_W1" sourceRef="Event_ReceiveOrder" targetRef="Gateway_Split"/>
+    <sequenceFlow id="Flow_W2" sourceRef="Gateway_Split" targetRef="Task_PickItems"/>
+    <sequenceFlow id="Flow_W3" sourceRef="Gateway_Split" targetRef="Task_PrepareShipping"/>
+    <sequenceFlow id="Flow_W4" sourceRef="Task_PickItems" targetRef="Gateway_Join"/>
+    <sequenceFlow id="Flow_W5" sourceRef="Task_PrepareShipping" targetRef="Gateway_Join"/>
+    <sequenceFlow id="Flow_W6" sourceRef="Gateway_Join" targetRef="Task_ShipOrder"/>
+    <sequenceFlow id="Flow_W7" sourceRef="Task_ShipOrder" targetRef="EndEvent_Shipped"/>
+
+  </process>
+
+  <!-- Message Definition -->
+  <message id="Message_Order" name="OrderMessage"/>
+
+</definitions>

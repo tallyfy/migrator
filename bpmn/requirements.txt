@@ -1,0 +1,18 @@
+# BPMN to Tallyfy Migrator Requirements
+# Python 3.8+ required
+
+# Core dependencies
+lxml>=4.9.0           # XML parsing with namespace support
+python-dotenv>=1.0.0  # Environment variable management
+
+# Optional AI enhancement (not required for basic operation)
+anthropic>=0.18.0     # Claude API for AI-enhanced decisions
+
+# Development dependencies
+pytest>=7.0.0         # Testing framework
+black>=23.0.0         # Code formatting
+pylint>=2.17.0        # Code linting
+
+# Optional for API integration
+requests>=2.31.0      # HTTP client for Tallyfy API
+pydantic>=2.0.0       # Data validation

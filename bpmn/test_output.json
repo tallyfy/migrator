@@ -1,0 +1,306 @@
+{
+  "source_file": "test_process.bpmn",
+  "timestamp": "2025-08-16T15:30:10.969644",
+  "summary": {
+    "total_processes": 1,
+    "total_elements": 12,
+    "total_tasks": 3,
+    "total_gateways": 1,
+    "total_events": 2,
+    "complexity": "Simple",
+    "estimated_migration_time": "1-2 hours"
+  },
+  "processes": [
+    {
+      "id": "Process_1",
+      "name": "Document Approval Process",
+      "isExecutable": "true",
+      "elements": {
+        "tasks": [
+          {
+            "type": "userTask",
+            "id": "task_1",
+            "name": "Review Document",
+            "documentation": null,
+            "incoming": [
+              "flow_1"
+            ],
+            "outgoing": [
+              "flow_2"
+            ],
+            "properties": {},
+            "forms": []
+          },
+          {
+            "type": "userTask",
+            "id": "task_2",
+            "name": "Make Revisions",
+            "documentation": null,
+            "incoming": [
+              "flow_4"
+            ],
+            "outgoing": [
+              "flow_5"
+            ],
+            "properties": {},
+            "forms": []
+          },
+          {
+            "type": "serviceTask",
+            "id": "task_3",
+            "name": "Publish Document",
+            "documentation": null,
+            "incoming": [
+              "flow_3"
+            ],
+            "outgoing": [
+              "flow_6"
+            ],
+            "properties": {},
+            "forms": []
+          }
+        ],
+        "gateways": [
+          {
+            "type": "exclusiveGateway",
+            "id": "gateway_1",
+            "name": "Approval Decision",
+            "incoming": [
+              "flow_2"
+            ],
+            "outgoing": [
+              "flow_3",
+              "flow_4"
+            ],
+            "default": null
+          }
+        ],
+        "events": [
+          {
+            "type": "startEvent",
+            "category": "start",
+            "id": "start_1",
+            "name": "Request Received",
+            "eventType": "none",
+            "incoming": [],
+            "outgoing": [],
+            "attachedTo": null,
+            "cancelActivity": "true"
+          },
+          {
+            "type": "endEvent",
+            "category": "end",
+            "id": "end_1",
+            "name": "Process Complete",
+            "eventType": "none",
+            "incoming": [
+              "flow_6"
+            ],
+            "outgoing": [],
+            "attachedTo": null,
+            "cancelActivity": "true"
+          }
+        ],
+        "flows": [
+          {
+            "type": "sequenceFlow",
+            "id": "flow_1",
+            "name": "",
+            "sourceRef": "start_1",
+            "targetRef": "task_1",
+            "condition": null
+          },
+          {
+            "type": "sequenceFlow",
+            "id": "flow_2",
+            "name": "",
+            "sourceRef": "task_1",
+            "targetRef": "gateway_1",
+            "condition": null
+          },
+          {
+            "type": "sequenceFlow",
+            "id": "flow_3",
+            "name": "Approved",
+            "sourceRef": "gateway_1",
+            "targetRef": "task_3",
+            "condition": null
+          },
+          {
+            "type": "sequenceFlow",
+            "id": "flow_4",
+            "name": "Rejected",
+            "sourceRef": "gateway_1",
+            "targetRef": "task_2",
+            "condition": null
+          },
+          {
+            "type": "sequenceFlow",
+            "id": "flow_5",
+            "name": "",
+            "sourceRef": "task_2",
+            "targetRef": "task_1",
+            "condition": null
+          },
+          {
+            "type": "sequenceFlow",
+            "id": "flow_6",
+            "name": "",
+            "sourceRef": "task_3",
+            "targetRef": "end_1",
+            "condition": null
+          }
+        ],
+        "dataObjects": [],
+        "lanes": [],
+        "subprocesses": []
+      },
+      "statistics": {
+        "total_elements": 12,
+        "tasks": 3,
+        "gateways": 1,
+        "events": 2,
+        "flows": 6,
+        "data_objects": 0,
+        "lanes": 0,
+        "subprocesses": 0,
+        "complexity_score": 10
+      },
+      "pool": {
+        "type": "pool",
+        "id": "Participant_1",
+        "name": "Document Review",
+        "processRef": "Process_1"
+      }
+    }
+  ],
+  "tallyfy_templates": [
+    {
+      "title": "Document Approval Process",
+      "description": "Migrated from BPMN process: Process_1",
+      "steps": [
+        {
+          "position": 0,
+          "title": "Review Document",
+          "description": null,
+          "task_type": "task",
+          "bpmn_task_id": "task_1",
+          "bpmn_task_type": "userTask"
+        },
+        {
+          "position": 1,
+          "title": "Make Revisions",
+          "description": null,
+          "task_type": "task",
+          "bpmn_task_id": "task_2",
+          "bpmn_task_type": "userTask"
+        },
+        {
+          "position": 2,
+          "title": "Publish Document",
+          "description": null,
+          "task_type": "task",
+          "bpmn_task_id": "task_3",
+          "bpmn_task_type": "serviceTask",
+          "webhook": {
+            "url": "{{CONFIGURE_WEBHOOK_URL}}",
+            "method": "POST",
+            "headers": {},
+            "body": {}
+          }
+        }
+      ],
+      "rules": [
+        {
+          "type": "conditional",
+          "condition": {
+            "field": "gateway_gateway_1_decision",
+            "operator": "equals",
+            "value": "path_1"
+          },
+          "action": {
+            "type": "show",
+            "target": "branch_1_steps"
+          },
+          "bpmn_gateway_id": "gateway_1"
+        },
+        {
+          "type": "conditional",
+          "condition": {
+            "field": "gateway_gateway_1_decision",
+            "operator": "equals",
+            "value": "path_2"
+          },
+          "action": {
+            "type": "show",
+            "target": "branch_2_steps"
+          },
+          "bpmn_gateway_id": "gateway_1"
+        }
+      ],
+      "captures": [],
+      "groups": [],
+      "metadata": {
+        "bpmn_process_id": "Process_1",
+        "migration_timestamp": "2025-08-16T15:30:10.972364",
+        "migration_version": "1.0"
+      },
+      "migration_details": {
+        "successful": [
+          {
+            "bpmn_element": "task_1",
+            "tallyfy_step": "Review Document"
+          },
+          {
+            "bpmn_element": "task_2",
+            "tallyfy_step": "Make Revisions"
+          },
+          {
+            "bpmn_element": "gateway_1",
+            "tallyfy_rules": 2
+          }
+        ],
+        "partial": [
+          {
+            "bpmn_element": "task_3",
+            "tallyfy_step": "Publish Document",
+            "warnings": [
+              "Service task requires webhook configuration"
+            ]
+          }
+        ],
+        "failed": [
+          {
+            "bpmn_element": "start_1",
+            "reason": "Event type not supported"
+          },
+          {
+            "bpmn_element": "end_1",
+            "reason": "Event type not supported"
+          }
+        ]
+      }
+    }
+  ],
+  "migration_report": {
+    "summary": {
+      "total_processes": 1,
+      "total_templates": 1,
+      "migration_rate": 50.0,
+      "manual_work_required": true
+    },
+    "statistics": {
+      "elements_processed": 6,
+      "successful_migrations": 3,
+      "partial_migrations": 1,
+      "failed_migrations": 2
+    },
+    "recommendations": [
+      "Redesign 2 unsupported elements"
+    ],
+    "complexity": "Simple",
+    "estimated_work": "1-2 hours"
+  },
+  "warnings": [],
+  "errors": []
+}

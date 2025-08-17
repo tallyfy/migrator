@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" 
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" 
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" 
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI" 
+                  xmlns:camunda="http://camunda.org/schema/1.0/bpmn"
+                  id="Definitions_1" 
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+  
+  <bpmn:process id="approval_process" name="Simple Approval Process" isExecutable="true">
+    
+    <!-- Start Event -->
+    <bpmn:startEvent id="start_event" name="Request Received">
+      <bpmn:outgoing>flow1</bpmn:outgoing>
+    </bpmn:startEvent>
+    
+    <!-- Fill Request Form -->
+    <bpmn:userTask id="fill_request" name="Fill Request Form">
+      <bpmn:incoming>flow1</bpmn:incoming>
+      <bpmn:outgoing>flow2</bpmn:outgoing>
+      <bpmn:extensionElements>
+        <camunda:formData>
+          <camunda:formField id="amount" label="Request Amount" type="long">
+            <camunda:validation>
+              <camunda:constraint name="required" />
+              <camunda:constraint name="min" config="0" />
+              <camunda:constraint name="max" config="10000" />
+            </camunda:validation>
+          </camunda:formField>
+          <camunda:formField id="reason" label="Reason for Request" type="string">
+            <camunda:validation>
+              <camunda:constraint name="required" />
+            </camunda:validation>
+          </camunda:formField>
+          <camunda:formField id="priority" label="Priority" type="enum">
+            <camunda:value id="low" name="Low" />
+            <camunda:value id="medium" name="Medium" />
+            <camunda:value id="high" name="High" />
+          </camunda:formField>
+        </camunda:formData>
+      </bpmn:extensionElements>
+    </bpmn:userTask>
+    
+    <!-- Review Request -->
+    <bpmn:userTask id="review_request" name="Review Request">
+      <bpmn:incoming>flow2</bpmn:incoming>
+      <bpmn:outgoing>flow3</bpmn:outgoing>
+    </bpmn:userTask>
+    
+    <!-- Decision Gateway -->
+    <bpmn:exclusiveGateway id="decision_gateway" name="Approve?">
+      <bpmn:incoming>flow3</bpmn:incoming>
+      <bpmn:outgoing>flow_approved</bpmn:outgoing>
+      <bpmn:outgoing>flow_rejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    
+    <!-- Approved Path -->
+    <bpmn:userTask id="process_approved" name="Process Approved Request">
+      <bpmn:incoming>flow_approved</bpmn:incoming>
+      <bpmn:outgoing>flow4</bpmn:outgoing>
+    </bpmn:userTask>
+    
+    <!-- Rejected Path -->
+    <bpmn:userTask id="notify_rejection" name="Notify Rejection">
+      <bpmn:incoming>flow_rejected</bpmn:incoming>
+      <bpmn:outgoing>flow5</bpmn:outgoing>
+    </bpmn:userTask>
+    
+    <!-- End Events -->
+    <bpmn:endEvent id="end_approved" name="Request Processed">
+      <bpmn:incoming>flow4</bpmn:incoming>
+    </bpmn:endEvent>
+    
+    <bpmn:endEvent id="end_rejected" name="Request Rejected">
+      <bpmn:incoming>flow5</bpmn:incoming>
+    </bpmn:endEvent>
+    
+    <!-- Sequence Flows -->
+    <bpmn:sequenceFlow id="flow1" sourceRef="start_event" targetRef="fill_request" />
+    <bpmn:sequenceFlow id="flow2" sourceRef="fill_request" targetRef="review_request" />
+    <bpmn:sequenceFlow id="flow3" sourceRef="review_request" targetRef="decision_gateway" />
+    
+    <bpmn:sequenceFlow id="flow_approved" name="Approved" sourceRef="decision_gateway" targetRef="process_approved">
+      <bpmn:conditionExpression>${decision == 'approve'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="flow_rejected" name="Rejected" sourceRef="decision_gateway" targetRef="notify_rejection">
+      <bpmn:conditionExpression>${decision == 'reject'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="flow4" sourceRef="process_approved" targetRef="end_approved" />
+    <bpmn:sequenceFlow id="flow5" sourceRef="notify_rejection" targetRef="end_rejected" />
+    
+  </bpmn:process>
+  
+  <!-- Diagram Information -->
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="approval_process">
+      <bpmndi:BPMNShape id="start_event_di" bpmnElement="start_event">
+        <dc:Bounds x="152" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="fill_request_di" bpmnElement="fill_request">
+        <dc:Bounds x="240" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="review_request_di" bpmnElement="review_request">
+        <dc:Bounds x="390" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="decision_gateway_di" bpmnElement="decision_gateway" isMarkerVisible="true">
+        <dc:Bounds x="545" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="process_approved_di" bpmnElement="process_approved">
+        <dc:Bounds x="650" y="30" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="notify_rejection_di" bpmnElement="notify_rejection">
+        <dc:Bounds x="650" y="140" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_approved_di" bpmnElement="end_approved">
+        <dc:Bounds x="802" y="52" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="end_rejected_di" bpmnElement="end_rejected">
+        <dc:Bounds x="802" y="162" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
