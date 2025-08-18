@@ -1,0 +1,64 @@
+You are transforming a Trello board (Kanban) into a Tallyfy sequential process.
+
+Trello Board Details:
+- Board Name: {board_name}
+- Board Description: {board_description}
+- List Count: {list_count}
+- Lists: {list_names}
+- Total Cards: {card_count}
+- Cards per List: {cards_per_list}
+- Active Members: {member_count}
+- Labels Used: {labels}
+- Has Power-Ups: {power_ups}
+
+List Flow Analysis:
+{list_flow_detail}
+
+Card Movement Patterns:
+- Average Card Lifetime: {avg_lifetime}
+- Typical Flow: {typical_flow}
+- Backwards Movement: {backwards_movement}
+- Stuck Cards: {stuck_cards}
+
+Board Purpose:
+- Type: {board_type} (Project|Support|Development|Marketing|Other)
+- Workflow Pattern: {workflow_pattern}
+- Team Usage: {team_usage}
+
+CRITICAL: Trello is parallel (Kanban) but Tallyfy is sequential.
+Each list should become multiple steps to preserve state transitions.
+
+Recommend transformation approach.
+
+Respond with JSON only:
+{
+  "transformation_pattern": "standard_3_step|simplified_2_step|complex_multi_step",
+  "process_structure": [
+    {
+      "original_list": "list name",
+      "becomes_steps": [
+        {
+          "step_name": "name",
+          "step_type": "task|approval|notification",
+          "purpose": "entry|work|exit"
+        }
+      ],
+      "rationale": "why this structure"
+    }
+  ],
+  "paradigm_shift_impact": "minimal|moderate|significant",
+  "card_handling": {
+    "active_cards": "how to migrate cards in progress",
+    "completed_cards": "how to handle done cards",
+    "blocked_cards": "how to handle stuck items"
+  },
+  "automation_mapping": {
+    "butler_rules": "how to handle Butler automation",
+    "due_dates": "how to preserve deadlines",
+    "recurring_cards": "how to handle recurring items"
+  },
+  "user_training": "what users need to understand",
+  "benefits": ["advantages of sequential flow"],
+  "challenges": ["potential issues"],
+  "confidence": 0.0-1.0
+}

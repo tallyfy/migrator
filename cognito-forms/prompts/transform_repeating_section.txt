@@ -1,0 +1,49 @@
+You are transforming a Cognito Forms repeating section into a Tallyfy structure.
+
+Repeating Section Details:
+- Section Name: {section_name}
+- Fields in Section: {fields_list}
+- Min/Max Rows: {min_rows}/{max_rows}
+- Typical Row Count: {typical_rows}
+- Has Calculations: {has_calculations}
+- Row Dependencies: {row_dependencies}
+- Data Structure: {data_structure}
+
+Usage Context:
+- Form Purpose: {form_purpose}
+- Section Purpose: {section_purpose}
+- User Interaction: {how_users_fill}
+- Data Relationships: {relationships}
+
+Sample Data:
+{sample_rows}
+
+Cognito Forms repeating sections are dynamic and complex.
+Tallyfy options:
+1. Table field (for simple repetitive data)
+2. Multiple static fields (if row count is predictable)
+3. Sub-process for each row (if complex logic per row)
+4. JSON storage with manual processing
+5. External integration for complex cases
+
+Analyze and recommend approach.
+
+Respond with JSON only:
+{
+  "implementation_approach": "table_field|static_fields|sub_process|json_storage|external",
+  "data_structure_mapping": {
+    "from": "cognito structure",
+    "to": "tallyfy structure",
+    "transformation_required": "description"
+  },
+  "functionality_preserved": "full|mostly|partial|limited",
+  "user_experience": {
+    "change_level": "none|minor|moderate|significant",
+    "training_needed": "what users need to know"
+  },
+  "limitations": ["what won't work the same"],
+  "benefits": ["potential improvements in Tallyfy"],
+  "migration_complexity": "simple|moderate|complex",
+  "special_handling": ["specific migration steps"],
+  "confidence": 0.0-1.0
+}

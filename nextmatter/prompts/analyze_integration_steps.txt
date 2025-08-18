@@ -1,0 +1,52 @@
+You are analyzing NextMatter integration steps to determine how to implement them in Tallyfy.
+
+Integration Step Details:
+- Step Name: {step_name}
+- Integration Type: {integration_type}
+- System: {target_system}
+- Method: {http_method}
+- Endpoint: {endpoint_url}
+- Authentication: {auth_type}
+- Payload Structure: {payload_structure}
+- Response Handling: {response_handling}
+- Error Handling: {error_handling}
+- Retry Policy: {retry_policy}
+
+Data Mapping:
+- Input Variables: {input_variables}
+- Output Variables: {output_variables}
+- Transformations: {data_transformations}
+
+Workflow Context:
+- Previous Step: {previous_step}
+- Next Step: {next_step}
+- Conditional Logic: {conditions}
+- Dependencies: {dependencies}
+
+NextMatter has deep integration capabilities. Tallyfy has webhooks and API tasks but may be more limited.
+Analyze the best implementation approach.
+
+Respond with JSON only:
+{
+  "implementation_method": "webhook|api_task|zapier|manual|custom",
+  "complexity_level": "simple|moderate|complex|requires_custom",
+  "tallyfy_configuration": {
+    "step_type": "webhook|task|approval",
+    "webhook_config": {
+      "url": "endpoint",
+      "method": "POST|GET|PUT",
+      "headers": {},
+      "authentication": "how to handle auth"
+    }
+  },
+  "data_handling": {
+    "request_mapping": "how to map input data",
+    "response_storage": "where to store response",
+    "error_handling": "fallback approach"
+  },
+  "limitations": ["what can't be replicated"],
+  "workarounds": ["alternative approaches"],
+  "external_tools_needed": ["Zapier", "Make", "custom middleware"],
+  "testing_requirements": "what needs testing",
+  "confidence": 0.0-1.0
+}

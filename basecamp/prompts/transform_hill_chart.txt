@@ -1,0 +1,49 @@
+You are transforming Basecamp 3's Hill Chart progress tracking into Tallyfy's progress system.
+
+Hill Chart Details:
+- Project Name: {project_name}
+- Scopes on Hill: {scopes_list}
+- Current Positions: {scope_positions}
+- Update History: {position_history}
+
+Scope Details:
+{scopes_detail}
+
+Hill Chart Concept:
+- Left side (uphill): Problem-solving, figuring things out, unknown work
+- Top of hill: Solution found, approach clear
+- Right side (downhill): Execution, implementation, known work
+
+Current Status:
+- Scopes Uphill: {uphill_count}
+- Scopes at Peak: {peak_count}
+- Scopes Downhill: {downhill_count}
+- Scopes Complete: {complete_count}
+
+Tallyfy doesn't have hill charts but has progress tracking and status indicators.
+Determine how to preserve this progress information.
+
+Respond with JSON only:
+{
+  "progress_mapping_strategy": "percentage|status_based|phase_based",
+  "hill_to_progress_conversion": [
+    {
+      "hill_position": "0-30% (early uphill)",
+      "tallyfy_status": "suggested status",
+      "progress_percentage": number,
+      "phase_name": "suggested phase"
+    }
+  ],
+  "scope_handling": "tasks|sub_processes|milestones",
+  "progress_visualization": "how to show progress in Tallyfy",
+  "status_categories": [
+    {
+      "name": "category name",
+      "hill_equivalent": "uphill|peak|downhill",
+      "description": "what it means"
+    }
+  ],
+  "update_frequency": "how often to update progress",
+  "information_preserved": "full|partial|conceptual",
+  "confidence": 0.0-1.0
+}

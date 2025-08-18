@@ -1,0 +1,49 @@
+You are mapping a Jotform widget to the most appropriate Tallyfy implementation.
+
+Widget Details:
+- Widget Name: {widget_name}
+- Widget Type: {widget_type}
+- Widget Description: {widget_description}
+- Configuration: {widget_config}
+- Data Collected: {data_structure}
+- User Interaction: {interaction_type}
+- Sample Data: {sample_data}
+
+Common Jotform Widgets:
+- Configurable List (dynamic table rows)
+- Image Picker (visual selection)
+- Google Maps (location selection)
+- Signature (e-signature)
+- Terms & Conditions (agreement)
+- QR/Barcode Scanner
+- Social Media widgets
+- Calendar Picker
+- Matrix fields
+
+Available Tallyfy Alternatives:
+- Table field (for lists/grids)
+- Image field with selection
+- Location/address field
+- Signature field
+- Agreement checkbox
+- Text input (for codes)
+- URL fields (for social)
+- Date/time picker
+- Multi-select or rating grid
+
+Determine the best mapping strategy.
+
+Respond with JSON only:
+{
+  "tallyfy_implementation": "field_type or combination",
+  "implementation_method": "direct|workaround|custom",
+  "data_structure_mapping": {
+    "from": "widget data structure",
+    "to": "tallyfy structure"
+  },
+  "functionality_preserved": "full|partial|limited",
+  "user_experience_change": "none|minor|significant",
+  "migration_notes": "special instructions",
+  "fallback_option": "if primary doesn't work",
+  "confidence": 0.0-1.0
+}

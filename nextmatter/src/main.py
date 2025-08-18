@@ -53,6 +53,11 @@ class NextMatterMigrationOrchestrator:
         self.checkpoint_manager = CheckpointManager(self.migration_id)
         self.error_handler = ErrorHandler()
         
+        # Track workflow paradigm shifts
+        self.workflow_mappings = {}
+        self.step_mappings = {}
+        self.integration_mappings = {}
+        
         logger.info(f"NextMatter Migration Orchestrator initialized")
         logger.info(f"Migration ID: {self.migration_id}")
     
@@ -161,9 +166,12 @@ class NextMatterMigrationOrchestrator:
         logger.info("Starting Discovery Phase...")
         
         discovery_data = {
-            'templates': [],
+            'workflows': [],
             'instances': [],
             'users': [],
+            'teams': [],
+            'forms': [],
+            'integrations': [],
             'statistics': {}
         }
         
@@ -172,19 +180,57 @@ class NextMatterMigrationOrchestrator:
             if not self.vendor_client.test_connection():
                 raise Exception("Failed to connect to NextMatter")
             
-            # Discover templates/workflows/forms
-            logger.info("Discovering templates...")
-            # Add vendor-specific discovery logic here
+            # Discover workflows (processes)
+            logger.info("Discovering workflows...")
+            discovery_data['workflows'] = self.vendor_client.get_workflows()
+            logger.info(f"  Found {len(discovery_data['workflows'])} workflows")
             
-            # Discover users
+            # Get detailed workflow information
+            for workflow in discovery_data['workflows']:
+                workflow_id = workflow.get('id')
+                try:
+                    # Get workflow steps
+                    steps = self.vendor_client.get_workflow_steps(workflow_id)
+                    workflow['steps'] = steps
+                    logger.info(f"  Workflow '{workflow.get('name')}': {len(steps)} steps")
+                    
+                    # Identify integration steps
+                    integration_steps = [s for s in steps if s.get('type') == 'integration']
+                    if integration_steps:
+                        logger.info(f"    - {len(integration_steps)} integration steps found")
+                        workflow['has_integrations'] = True
+                        
+                except Exception as e:
+                    logger.warning(f"Could not get details for workflow {workflow_id}: {e}")
+            
+            # Discover active instances
+            logger.info("Discovering active instances...")
+            discovery_data['instances'] = self.vendor_client.get_instances()
+            logger.info(f"  Found {len(discovery_data['instances'])} active instances")
+            
+            # Discover forms
+            logger.info("Discovering forms...")
+            discovery_data['forms'] = self.vendor_client.get_forms()
+            logger.info(f"  Found {len(discovery_data['forms'])} forms")
+            
+            # Discover users and teams
             logger.info("Discovering users...")
             discovery_data['users'] = self.vendor_client.get_users()
+            logger.info(f"  Found {len(discovery_data['users'])} users")
+            
+            logger.info("Discovering teams...")
+            discovery_data['teams'] = self.vendor_client.get_teams()
+            logger.info(f"  Found {len(discovery_data['teams'])} teams")
             
             # Calculate statistics
             discovery_data['statistics'] = {
-                'total_templates': len(discovery_data['templates']),
+                'total_workflows': len(discovery_data['workflows']),
                 'total_instances': len(discovery_data['instances']),
                 'total_users': len(discovery_data['users']),
+                'total_teams': len(discovery_data['teams']),
+                'total_forms': len(discovery_data['forms']),
+                'workflows_with_integrations': sum(1 for w in discovery_data['workflows'] if w.get('has_integrations')),
+                'total_steps': sum(len(w.get('steps', [])) for w in discovery_data['workflows']),
                 'discovered_at': datetime.utcnow().isoformat()
             }
             

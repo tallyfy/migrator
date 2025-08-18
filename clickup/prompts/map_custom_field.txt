@@ -1,0 +1,38 @@
+You are mapping a ClickUp custom field to the most appropriate Tallyfy field type.
+
+ClickUp Field Details:
+- Field Name: {field_name}
+- Field Type: {field_type}
+- Field Description: {field_description}
+- Sample Values: {sample_values}
+- Is Required: {is_required}
+- Has Default Value: {has_default}
+- Field Configuration: {field_config}
+
+Available Tallyfy Field Types:
+- short_text: Single line text
+- long_text: Multi-line text
+- number: Numeric values
+- date: Date picker
+- dropdown: Single selection from list
+- multi_select: Multiple selections
+- yes_no: Boolean field
+- email: Email address
+- phone: Phone number
+- url: Web link
+- file_attachment: File upload
+- member_select: User selection
+- rating: 1-5 star rating
+- currency: Money field
+
+Analyze the field and determine the best Tallyfy equivalent.
+
+Respond with JSON only:
+{
+  "tallyfy_field_type": "field_type",
+  "conversion_notes": "any special handling needed",
+  "data_loss_risk": "none|minimal|moderate|high",
+  "preserve_as_metadata": ["what to store in field description"],
+  "validation_rules": {"type": "pattern|range|required", "value": "rule"},
+  "confidence": 0.0-1.0
+}

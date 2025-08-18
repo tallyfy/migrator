@@ -1,0 +1,45 @@
+You are analyzing a Jotform to determine if it should become a simple kick-off form or a multi-step workflow in Tallyfy.
+
+Form Details:
+- Form Name: {form_name}
+- Total Fields: {field_count}
+- Page Count: {page_count}
+- Field Types Breakdown: {field_types}
+- Has Conditional Logic: {has_conditions}
+- Has Calculations: {has_calculations}
+- Has Payment Fields: {has_payment}
+- Has File Uploads: {has_uploads}
+- Integration Count: {integration_count}
+- Submission Count: {submission_count}
+- Average Completion Time: {avg_completion_time}
+
+Field Sections:
+{sections}
+
+Conditional Logic Summary:
+{conditions_summary}
+
+Tallyfy Guidelines:
+- Simple forms (≤20 fields, no complex logic) → Single kick-off form
+- Medium forms (20-50 fields, some logic) → Multi-step process
+- Complex forms (50+ fields, heavy logic) → Structured workflow with phases
+
+Analyze and recommend the optimal structure.
+
+Respond with JSON only:
+{
+  "migration_strategy": "simple_kickoff|multi_step|complex_workflow",
+  "recommended_structure": [
+    {
+      "step_name": "name",
+      "step_type": "kickoff|task|approval|payment",
+      "fields_included": ["field names"],
+      "estimated_fields": number
+    }
+  ],
+  "complexity_factors": ["list of complexity drivers"],
+  "simplification_opportunities": ["ways to simplify"],
+  "estimated_hours": number,
+  "risk_level": "low|medium|high",
+  "confidence": 0.0-1.0
+}

@@ -149,3 +149,9 @@ class WrikeClient:
         except Exception as e:
             logger.error(f"❌ Wrike connection failed: {e}")
             return False
+    
+    def get_account(self) -> Dict[str, Any]:
+        """Get account information"""
+        logger.info("Fetching account information...")
+        result = self._make_request('GET', 'account')
+        return result.get('data', [{}])[0]

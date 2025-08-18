@@ -1,0 +1,56 @@
+You are optimizing Wrike's deep folder hierarchy for Tallyfy's flatter structure.
+
+Folder Hierarchy Details:
+- Total Spaces: {space_count}
+- Total Folders: {folder_count}
+- Maximum Depth: {max_depth} levels
+- Average Depth: {avg_depth} levels
+- Total Projects: {project_count}
+- Total Tasks: {task_count}
+
+Hierarchy Structure:
+{hierarchy_tree}
+
+Folder Purposes:
+{folder_purposes}
+
+Organization Pattern:
+- By Department: {by_department}
+- By Project Type: {by_type}
+- By Client: {by_client}
+- By Time Period: {by_time}
+- Mixed: {mixed_organization}
+
+Tallyfy has a flatter structure:
+- Organization → Categories → Blueprints → Steps
+- Use tags and metadata for additional organization
+
+Recommend flattening strategy.
+
+Respond with JSON only:
+{
+  "flattening_strategy": "by_purpose|by_frequency|by_team|hybrid",
+  "category_structure": [
+    {
+      "category_name": "name",
+      "source_folders": ["folders that map here"],
+      "description": "category purpose",
+      "estimated_blueprints": number
+    }
+  ],
+  "tag_strategy": {
+    "primary_tags": ["main organizational tags"],
+    "secondary_tags": ["additional metadata"],
+    "tag_from": "what becomes tags instead of folders"
+  },
+  "depth_reduction": {
+    "from_levels": number,
+    "to_levels": number,
+    "consolidation_method": "how to consolidate"
+  },
+  "naming_convention": "recommended naming pattern",
+  "archival_strategy": "how to handle old/inactive folders",
+  "user_impact": "minimal|moderate|significant",
+  "training_notes": "what users need to know",
+  "confidence": 0.0-1.0
+}

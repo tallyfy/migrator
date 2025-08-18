@@ -29,7 +29,7 @@ class TrelloClient:
         logger.info("Trello client initialized")
     
     def _make_request(self, method: str, endpoint: str, **kwargs) -> Any:
-        """Make API request"""
+        """Make API request with rate limit handling"""
         url = f"{self.base_url}{endpoint}"
         
         # Add auth params
@@ -38,23 +38,41 @@ class TrelloClient:
         else:
             kwargs['params'] = self.params
         
-        try:
-            response = self.session.request(method, url, **kwargs)
-            response.raise_for_status()
-            
-            if response.status_code == 204:
-                return {'success': True}
-            
-            return response.json()
-            
-        except requests.exceptions.RequestException as e:
-            logger.error(f"API request failed: {e}")
-            raise
+        for attempt in range(3):
+            try:
+                response = self.session.request(method, url, **kwargs)
+                
+                # Handle rate limiting (300 req/10s per key, 100 req/10s per token)
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get('X-Rate-Limit-RetryAfter', 10))
+                    logger.warning(f"Rate limited. Waiting {retry_after} seconds...")
+                    import time
+                    time.sleep(retry_after)
+                    continue
+                
+                response.raise_for_status()
+                
+                if response.status_code == 204:
+                    return {'success': True}
+                
+                return response.json()
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == 2:
+                    logger.error(f"API request failed after 3 attempts: {e}")
+                    raise
+                import time
+                time.sleep(2 ** attempt)
     
     # Board Management
-    def get_boards(self) -> List[Dict[str, Any]]:
+    def get_boards(self, filter: str = 'open') -> List[Dict[str, Any]]:
         """Get all boards for authenticated user"""
-        return self._make_request('GET', '/members/me/boards')
+        params = {
+            'filter': filter,  # open, closed, all
+            'fields': 'id,name,desc,closed,dateLastActivity,memberships',
+            'lists': 'open'
+        }
+        return self._make_request('GET', '/members/me/boards', params=params)
     
     def get_board(self, board_id: str) -> Dict[str, Any]:
         """Get board details"""
@@ -159,9 +177,33 @@ class TrelloClient:
     def test_connection(self) -> bool:
         """Test API connection"""
         try:
-            self._make_request('GET', '/members/me')
-            logger.info("Trello API connection successful")
+            member = self._make_request('GET', '/members/me')
+            logger.info(f"✅ Trello API connection successful - User: {member.get('username')}")
             return True
         except Exception as e:
-            logger.error(f"Trello API connection failed: {e}")
+            logger.error(f"❌ Trello API connection failed: {e}")
             return False
+    
+    def get_webhooks(self) -> List[Dict[str, Any]]:
+        """Get all webhooks for the token"""
+        return self._make_request('GET', f'/tokens/{self.api_token}/webhooks')
+    
+    def get_board_actions(self, board_id: str, filter: str = 'all', limit: int = 50) -> List[Dict[str, Any]]:
+        """Get board activity/actions"""
+        params = {
+            'filter': filter,
+            'limit': limit
+        }
+        return self._make_request('GET', f'/boards/{board_id}/actions', params=params)
+    
+    def get_card_attachments(self, card_id: str) -> List[Dict[str, Any]]:
+        """Get card attachments"""
+        return self._make_request('GET', f'/cards/{card_id}/attachments')
+    
+    def get_list(self, list_id: str) -> Dict[str, Any]:
+        """Get list details"""
+        return self._make_request('GET', f'/lists/{list_id}')
+    
+    def get_list_cards(self, list_id: str) -> List[Dict[str, Any]]:
+        """Get cards in a list"""
+        return self._make_request('GET', f'/lists/{list_id}/cards')

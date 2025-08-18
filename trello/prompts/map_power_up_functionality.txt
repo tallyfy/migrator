@@ -1,0 +1,56 @@
+You are mapping Trello Power-Up functionality to Tallyfy features.
+
+Power-Up Details:
+- Power-Up Name: {power_up_name}
+- Category: {category}
+- Functionality: {functionality_description}
+- Usage in Board: {usage_description}
+- Configuration: {power_up_config}
+- Data Collected: {data_structure}
+
+Common Power-Ups:
+- Butler (automation)
+- Custom Fields (additional data)
+- Card Aging (visual indicators)
+- Calendar (date visualization)
+- Voting (team decisions)
+- Time Tracking (work duration)
+- Maps (location data)
+- Slack/Teams (communication)
+
+Power-Up Specific Data:
+{power_up_data}
+
+Dependencies:
+- Cards Affected: {affected_cards}
+- Critical for Workflow: {is_critical}
+- Alternative Available: {has_alternative}
+
+Tallyfy doesn't have Power-Ups but has native features and integrations.
+Determine best way to preserve functionality.
+
+Respond with JSON only:
+{
+  "migration_approach": "native_feature|integration|webhook|manual|not_supported",
+  "tallyfy_implementation": {
+    "feature_type": "built_in|webhook|api|zapier|custom",
+    "configuration": {
+      "setup_required": "what needs to be configured",
+      "data_mapping": "how to map the data"
+    }
+  },
+  "functionality_coverage": "full|partial|minimal|none",
+  "data_preservation": {
+    "what_transfers": ["data that migrates"],
+    "what_is_lost": ["data that doesn't transfer"],
+    "workarounds": ["alternative approaches"]
+  },
+  "priority_level": "critical|important|nice_to_have|optional",
+  "implementation_effort": "none|minimal|moderate|significant",
+  "user_impact": {
+    "change_level": "none|minor|moderate|major",
+    "training_needed": "what users need to learn"
+  },
+  "alternatives": ["other ways to achieve similar results"],
+  "confidence": 0.0-1.0
+}

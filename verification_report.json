@@ -1,0 +1,346 @@
+{
+  "timestamp": "2025-08-18T10:39:55.719842",
+  "summary": {
+    "total_migrators": 15,
+    "complete": 0,
+    "partial": 10,
+    "missing": 0,
+    "scores": {
+      "asana": 65.5,
+      "basecamp": 79.3,
+      "clickup": 79.3,
+      "cognito-forms": 75.9,
+      "google-forms": 75.9,
+      "jotform": 77.6,
+      "kissflow": 69.0,
+      "monday": 75.9,
+      "nextmatter": 81.0,
+      "pipefy": 69.0,
+      "process-street": 69.0,
+      "rocketlane": 72.4,
+      "trello": 77.6,
+      "typeform": 67.2,
+      "wrike": 81.0
+    }
+  },
+  "results": {
+    "asana": {
+      "status": "incomplete",
+      "score": 65.5,
+      "issues": [
+        "README missing section: Architecture",
+        "README missing section: AI-Powered Features",
+        "README missing section: API Integration",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "Missing 5-phase migration pattern",
+        "Code quality issue: has 5 phases",
+        "Code quality issue: has rate limiting",
+        "Code quality issue: has batch processing",
+        "Code quality issue: has memory management",
+        "Prompts directory not found",
+        ".env.example missing AI API key configuration",
+        "OBJECT_MAPPING missing section: data preservation",
+        "OBJECT_MAPPING missing section: migration complexity",
+        "OBJECT_MAPPING missing section: special handling",
+        "OBJECT_MAPPING missing section: known limitations",
+        "OBJECT_MAPPING missing section: validation checklist",
+        "No test files found in tests directory"
+      ]
+    },
+    "basecamp": {
+      "status": "partial",
+      "score": 79.3,
+      "issues": [
+        "README missing section: Architecture",
+        "README missing section: API Integration",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "README missing section: Best Practices",
+        "Code quality issue: has rate limiting",
+        "Code quality issue: has batch processing",
+        "Code quality issue: has memory management",
+        "OBJECT_MAPPING missing section: field type mappings",
+        "No test files found in tests directory"
+      ]
+    },
+    "clickup": {
+      "status": "partial",
+      "score": 79.3,
+      "issues": [
+        "README missing section: Architecture",
+        "README missing section: API Integration",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "README missing section: Best Practices",
+        "Code quality issue: has rate limiting",
+        "Code quality issue: has batch processing",
+        "Code quality issue: has memory management",
+        "OBJECT_MAPPING missing section: field type mappings",
+        "No test files found in tests directory"
+      ]
+    },
+    "cognito-forms": {
+      "status": "partial",
+      "score": 75.9,
+      "issues": [
+        "Missing required file: src/api/cognito-forms_client.py",
+        "README missing section: Architecture",
+        "README missing section: API Integration",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "README missing section: Best Practices",
+        "Code quality issue: has rate limiting",
+        "Code quality issue: has batch processing",
+        "Code quality issue: has memory management",
+        ".env.example missing AI API key configuration",
+        "OBJECT_MAPPING missing section: validation checklist",
+        "No test files found in tests directory"
+      ]
+    },
+    "google-forms": {
+      "status": "partial",
+      "score": 75.9,
+      "issues": [
+        "Missing required file: src/api/google-forms_client.py",
+        "README missing section: Architecture",
+        "README missing section: API Integration",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "README missing section: Best Practices",
+        "Code quality issue: has batch processing",
+        "Code quality issue: has memory management",
+        ".env.example missing AI API key configuration",
+        "OBJECT_MAPPING missing section: field type mappings",
+        "OBJECT_MAPPING missing section: validation checklist",
+        "No test files found in tests directory"
+      ]
+    },
+    "jotform": {
+      "status": "partial",
+      "score": 77.6,
+      "issues": [
+        "README missing section: Architecture",
+        "README missing section: Data Mapping",
+        "README missing section: API Integration",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "README missing section: Best Practices",
+        "Code quality issue: has rate limiting",
+        "Code quality issue: has batch processing",
+        "Code quality issue: has memory management",
+        ".env.example missing AI API key configuration",
+        "No test files found in tests directory"
+      ]
+    },
+    "kissflow": {
+      "status": "incomplete",
+      "score": 69.0,
+      "issues": [
+        "README missing section: Installation",
+        "README missing section: AI-Powered Features",
+        "README missing section: Data Mapping",
+        "README missing section: API Integration",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "README missing section: Best Practices",
+        "Code quality issue: has batch processing",
+        "Code quality issue: has memory management",
+        "Prompts directory not found",
+        ".env.example missing AI API key configuration",
+        "OBJECT_MAPPING missing section: core object mappings",
+        "OBJECT_MAPPING missing section: field type mappings",
+        "OBJECT_MAPPING missing section: special handling",
+        "OBJECT_MAPPING missing section: known limitations",
+        "OBJECT_MAPPING missing section: validation checklist"
+      ]
+    },
+    "monday": {
+      "status": "partial",
+      "score": 75.9,
+      "issues": [
+        "migrate.sh is not executable",
+        "README missing section: AI-Powered Features",
+        "Missing 5-phase migration pattern",
+        "Code quality issue: has 5 phases",
+        "Code quality issue: has rate limiting",
+        "Code quality issue: has memory management",
+        "Prompts directory not found",
+        ".env.example missing AI API key configuration",
+        "OBJECT_MAPPING missing section: core object mappings",
+        "OBJECT_MAPPING missing section: field type mappings",
+        "OBJECT_MAPPING missing section: data preservation",
+        "OBJECT_MAPPING missing section: migration complexity",
+        "OBJECT_MAPPING missing section: special handling",
+        "OBJECT_MAPPING missing section: known limitations",
+        "OBJECT_MAPPING missing section: validation checklist"
+      ]
+    },
+    "nextmatter": {
+      "status": "partial",
+      "score": 81.0,
+      "issues": [
+        "README missing section: Architecture",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "README missing section: Best Practices",
+        "Code quality issue: has rate limiting",
+        "Code quality issue: has batch processing",
+        "Code quality issue: has memory management",
+        "OBJECT_MAPPING missing section: field type mappings",
+        "No test files found in tests directory"
+      ]
+    },
+    "pipefy": {
+      "status": "incomplete",
+      "score": 69.0,
+      "issues": [
+        "README missing section: AI-Powered Features",
+        "README missing section: Data Mapping",
+        "README missing section: Usage Examples",
+        "README missing section: Paradigm Shifts",
+        "README missing section: Error Handling",
+        "README missing section: Best Practices",
+        "Missing 5-phase migration pattern",
+        "Code quality issue: has 5 phases",
+        "Code quality issue: has memory management",
+        "Prompts directory not found",
+        ".env.example missing AI API key configuration",
+        "OBJECT_MAPPING missing section: paradigm shifts",
+        "OBJECT_MAPPING missing section: data preservation",
+        "OBJECT_MAPPING missing section: special handling",
+        "OBJECT_MAPPING missing section: known limitations",
+        "OBJECT_MAPPING missing section: validation checklist",
+        "No test files found in tests directory"
+      ]
+    },
+    "process-street": {
+      "status": "incomplete",
+      "score": 69.0,
+      "issues": [
+        "Missing required file: src/api/process-street_client.py",
+        "README missing section: Architecture",
+        "README missing section: AI-Powered Features",
+        "README missing section: Data Mapping",
+        "README missing section: API Integration",
+        "README missing section: Paradigm Shifts",
+        "README missing section: Migration Process",
+        "README missing section: Best Practices",
+        "Code quality issue: has rate limiting",
+        "Code quality issue: has memory management",
+        "Prompts directory not found",
+        "OBJECT_MAPPING missing section: paradigm shifts",
+        "OBJECT_MAPPING missing section: data preservation",
+        "OBJECT_MAPPING missing section: migration complexity",
+        "OBJECT_MAPPING missing section: special handling",
+        "OBJECT_MAPPING missing section: known limitations",
+        "OBJECT_MAPPING missing section: validation checklist"
+      ]
+    },
+    "rocketlane": {
+      "status": "partial",
+      "score": 72.4,
+      "issues": [
+        "README missing section: Architecture",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "Missing 5-phase migration pattern",
+        "Code quality issue: has 5 phases",
+        "Code quality issue: has memory management",
+        "Prompts directory not found",
+        "OBJECT_MAPPING missing section: core object mappings",
+        "OBJECT_MAPPING missing section: data preservation",
+        "OBJECT_MAPPING missing section: migration complexity",
+        "OBJECT_MAPPING missing section: special handling",
+        "OBJECT_MAPPING missing section: known limitations",
+        "OBJECT_MAPPING missing section: validation checklist",
+        "No test files found in tests directory"
+      ]
+    },
+    "trello": {
+      "status": "partial",
+      "score": 77.6,
+      "issues": [
+        "README missing section: Architecture",
+        "README missing section: API Integration",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "README missing section: Best Practices",
+        "Code quality issue: has rate limiting",
+        "Code quality issue: has batch processing",
+        "Code quality issue: has memory management",
+        "OBJECT_MAPPING missing section: field type mappings",
+        "OBJECT_MAPPING missing section: paradigm shifts",
+        "No test files found in tests directory"
+      ]
+    },
+    "typeform": {
+      "status": "incomplete",
+      "score": 67.2,
+      "issues": [
+        "Missing required file: OBJECT_MAPPING.md",
+        "README missing section: Architecture",
+        "README missing section: API Integration",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "Code quality issue: has memory management",
+        "Prompts directory not found",
+        "OBJECT_MAPPING.md not found",
+        "No test files found in tests directory"
+      ]
+    },
+    "wrike": {
+      "status": "partial",
+      "score": 81.0,
+      "issues": [
+        "README missing section: Architecture",
+        "README missing section: API Integration",
+        "README missing section: Usage Examples",
+        "README missing section: Migration Process",
+        "README missing section: Error Handling",
+        "README missing section: Best Practices",
+        "Code quality issue: has batch processing",
+        "Code quality issue: has memory management",
+        "OBJECT_MAPPING missing section: field type mappings",
+        "No test files found in tests directory"
+      ]
+    }
+  },
+  "critical_issues": {
+    "Prompts directory not found": [
+      "asana",
+      "kissflow",
+      "monday",
+      "pipefy",
+      "process-street",
+      "rocketlane",
+      "typeform"
+    ],
+    "Missing required file: src/api/cognito-forms_client.py": [
+      "cognito-forms"
+    ],
+    "Missing required file: src/api/google-forms_client.py": [
+      "google-forms"
+    ],
+    "Missing required file: src/api/process-street_client.py": [
+      "process-street"
+    ],
+    "Missing required file: OBJECT_MAPPING.md": [
+      "typeform"
+    ],
+    "OBJECT_MAPPING.md not found": [
+      "typeform"
+    ]
+  }
+}

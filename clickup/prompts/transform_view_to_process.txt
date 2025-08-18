@@ -1,0 +1,38 @@
+You are transforming a ClickUp view configuration into a Tallyfy process structure.
+
+ClickUp View Details:
+- View Type: {view_type} (List|Board|Calendar|Gantt|Table|Timeline|Workload|Activity|Mind Map|Form)
+- View Name: {view_name}
+- Number of Items: {item_count}
+- Grouping: {grouping_field}
+- Sorting: {sorting_field}
+- Filters Applied: {filters}
+- Custom Fields Shown: {visible_fields}
+
+For Board View Additional Info:
+- Columns: {column_names}
+- Cards per Column: {cards_per_column}
+- WIP Limits: {wip_limits}
+
+Context:
+ClickUp's multiple views must be converted to Tallyfy's single process-centric view.
+Board views (Kanban) need transformation to sequential workflows.
+
+Determine the optimal process structure.
+
+Respond with JSON only:
+{
+  "process_structure": "linear|phased|branching",
+  "recommended_phases": [
+    {
+      "name": "phase name",
+      "description": "what this phase does",
+      "steps_count": number,
+      "entry_criteria": "when to enter"
+    }
+  ],
+  "paradigm_shift_notes": "explanation of the transformation",
+  "data_preservation": ["what view data to preserve as metadata"],
+  "user_training_needed": "minimal|moderate|significant",
+  "confidence": 0.0-1.0
+}

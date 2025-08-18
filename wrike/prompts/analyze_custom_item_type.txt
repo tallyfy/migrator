@@ -1,0 +1,62 @@
+You are analyzing a Wrike custom item type to determine how to represent it in Tallyfy.
+
+Custom Item Type Details:
+- Type Name: {type_name}
+- Type ID: {type_id}
+- Description: {description}
+- Base Type: {base_type} (Task|Project|Folder)
+- Custom Fields: {custom_fields}
+- Workflow: {workflow_states}
+- Icon/Color: {visual_identity}
+
+Field Configuration:
+{fields_detail}
+
+Workflow States:
+{workflow_detail}
+
+Usage Statistics:
+- Instance Count: {instance_count}
+- Active Items: {active_count}
+- Completed Items: {completed_count}
+- Average Duration: {avg_duration}
+
+Business Context:
+- Purpose: {business_purpose}
+- Users: {user_roles}
+- Process Flow: {process_description}
+
+Wrike custom item types are business-specific (Bug, Campaign, Candidate, etc.).
+Tallyfy uses blueprints with appropriate fields instead.
+
+Determine optimal blueprint structure.
+
+Respond with JSON only:
+{
+  "blueprint_type": "standard|specialized|complex",
+  "blueprint_configuration": {
+    "name": "suggested blueprint name",
+    "category": "suggested category",
+    "tags": ["relevant tags"],
+    "description": "blueprint purpose"
+  },
+  "field_mappings": [
+    {
+      "wrike_field": "field name",
+      "tallyfy_field": "field type",
+      "configuration": {},
+      "data_preserved": true|false
+    }
+  ],
+  "workflow_transformation": {
+    "approach": "status_based|step_based|approval_based",
+    "steps": ["suggested workflow steps"]
+  },
+  "special_features": {
+    "preserved": ["what carries over"],
+    "lost": ["what doesn't transfer"],
+    "enhanced": ["what improves in Tallyfy"]
+  },
+  "migration_complexity": "simple|moderate|complex",
+  "confidence": 0.0-1.0
+}

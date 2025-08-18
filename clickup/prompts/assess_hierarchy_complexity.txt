@@ -1,0 +1,28 @@
+You are analyzing a ClickUp workspace hierarchy to determine the optimal migration strategy to Tallyfy.
+
+ClickUp Structure:
+- Workspace: {workspace_name}
+- Number of Spaces: {space_count}
+- Number of Folders: {folder_count}
+- Number of Lists: {list_count}
+- Total Tasks: {task_count}
+- Maximum Hierarchy Depth: {max_depth} levels
+- Has Multiple Views: {has_multiple_views}
+- Custom Fields Count: {custom_field_count}
+
+Tallyfy supports a flatter structure with:
+- Organization → Category → Blueprint → Step (4 levels max)
+- Tags and metadata for additional organization
+
+Analyze the complexity and recommend a migration strategy.
+
+Respond with JSON only:
+{
+  "complexity_level": "simple|medium|complex|enterprise",
+  "flattening_strategy": "description of how to flatten hierarchy",
+  "estimated_hours": number,
+  "use_tags_for": ["list of what should become tags"],
+  "primary_grouping": "what becomes categories",
+  "risk_areas": ["potential issues"],
+  "confidence": 0.0-1.0
+}

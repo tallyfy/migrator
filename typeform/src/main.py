@@ -135,7 +135,11 @@ class TypeformMigrator:
             'workspaces': [],
             'forms': [],
             'total_responses': 0,
-            'workspace_members': []
+            'workspace_members': [],
+            'themes': [],
+            'images': [],
+            'webhooks': [],
+            'statistics': {}
         }
         
         try:
@@ -144,6 +148,15 @@ class TypeformMigrator:
             workspaces = self.typeform.get_workspaces()
             discovery['workspaces'] = workspaces.get('items', [])
             logger.info(f"Found {len(discovery['workspaces'])} workspaces")
+            
+            # Get themes (for styling reference)
+            logger.info("Fetching themes...")
+            try:
+                themes = self.typeform.get_themes()
+                discovery['themes'] = themes.get('items', [])
+                logger.info(f"Found {len(discovery['themes'])} themes")
+            except Exception as e:
+                logger.warning(f"Could not fetch themes: {e}")
             
             # Get workspace members (for first workspace)
             if discovery['workspaces']:
@@ -179,11 +192,20 @@ class TypeformMigrator:
                 except Exception as e:
                     logger.error(f"Failed to get details for form {form_summary['id']}: {e}")
             
+            # Calculate statistics
+            discovery['statistics'] = {
+                'workspaces': len(discovery['workspaces']),
+                'forms': len(discovery['forms']),
+                'total_responses': discovery['total_responses'],
+                'users': len(discovery['workspace_members']),
+                'themes': len(discovery['themes']),
+                'total_fields': sum(len(f.get('fields', [])) for f in discovery['forms']),
+                'avg_fields_per_form': sum(len(f.get('fields', [])) for f in discovery['forms']) / max(len(discovery['forms']), 1)
+            }
+            
             logger.info(f"\nDiscovery Summary:")
-            logger.info(f"  - Workspaces: {len(discovery['workspaces'])}")
-            logger.info(f"  - Forms: {len(discovery['forms'])}")
-            logger.info(f"  - Total Responses: {discovery['total_responses']}")
-            logger.info(f"  - Users: {len(discovery['workspace_members'])}")
+            for key, value in discovery['statistics'].items():
+                logger.info(f"  - {key}: {value}")
             
             # Save checkpoint
             self.checkpoint.save_checkpoint('discovery', discovery)
@@ -223,6 +245,13 @@ class TypeformMigrator:
             try:
                 # Transform user
                 user = self.user_transformer.transform(member)
+                
+                # Ensure required fields
+                if 'email' not in user:
+                    user['email'] = member.get('email') or f"user_{member.get('user_id')}@typeform.migrated"
+                if 'name' not in user:
+                    user['name'] = member.get('name') or user['email'].split('@')[0]
+                
                 logger.info(f"Processing user: {user['email']} ({user['role']})")
                 
                 if not self.dry_run:
@@ -244,9 +273,53 @@ class TypeformMigrator:
             except Exception as e:
                 logger.error(f"Failed to migrate user {member.get('email')}: {e}")
                 self.stats['errors'].append(f"User migration: {e}")
+                continue
         
         # Also extract respondent emails as guest users
         logger.info("\nExtracting respondent users from form responses...")
+        respondent_emails = set()
+        
+        # Sample responses to find unique respondent emails
+        for form in discovery_data.get('forms', [])[:5]:  # Sample first 5 forms
+            try:
+                responses = self.typeform.get_responses(form['id'], page_size=50)
+                for response in responses.get('items', []):
+                    # Check for email fields in answers
+                    for answer in response.get('answers', []):
+                        if answer.get('type') == 'email':
+                            respondent_emails.add(answer.get('email'))
+                    # Check hidden fields
+                    hidden = response.get('hidden', {})
+                    if 'email' in hidden:
+                        respondent_emails.add(hidden['email'])
+            except Exception as e:
+                logger.warning(f"Could not extract respondents from form {form['id']}: {e}")
+        
+        logger.info(f"Found {len(respondent_emails)} unique respondent emails")
+        
+        # Create guest users for respondents
+        for email in respondent_emails:
+            if email and email not in user_mapping:
+                try:
+                    guest_user = {
+                        'email': email,
+                        'name': email.split('@')[0],
+                        'role': 'guest'
+                    }
+                    
+                    if not self.dry_run:
+                        result = self.error_handler.with_retry(
+                            lambda: self.tallyfy.create_user(guest_user)
+                        )
+                        if result:
+                            user_mapping[email] = result['id']
+                            logger.info(f"  ✓ Created guest user: {email}")
+                    else:
+                        user_mapping[email] = f"dry_run_guest_{len(user_mapping)}"
+                        logger.info(f"  [DRY RUN] Would create guest user: {email}")
+                        
+                except Exception as e:
+                    logger.warning(f"Could not create guest user {email}: {e}")
         all_responses = []
         for form in discovery_data['forms'][:5]:  # Limit for performance
             try:

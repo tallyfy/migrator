@@ -26,14 +26,14 @@ class NextMatterClient:
             base_url: Base URL for NextMatter API
         """
         self.api_key = api_key or os.getenv('NEXTMATTER_API_KEY')
-        self.base_url = base_url or os.getenv('NEXTMATTER_BASE_URL', 'https://api.nextmatter.com/api/v1')
+        self.base_url = base_url or os.getenv('NEXTMATTER_BASE_URL', 'https://core.nextmatter.com/api')
         
         if not self.api_key:
             raise ValueError("NextMatter API key is required")
         
         self.session = requests.Session()
         self.session.headers.update({
-            'Authorization': f'Bearer {self.api_key}',
+            'Authorization': f'Api-Key {self.api_key}',
             'Content-Type': 'application/json',
             'Accept': 'application/json'
         })
@@ -64,20 +64,17 @@ class NextMatterClient:
                 time.sleep(2 ** attempt)
     
     def get_workflows(self) -> List[Dict[str, Any]]:
-        """Get all workflows"""
+        """Get all workflows (processes)"""
         logger.info("Fetching NextMatter workflows...")
         workflows = []
-        page = 1
+        next_url = 'processes/'
         
-        while True:
-            result = self._make_request('GET', 'workflows', params={'page': page, 'per_page': 100})
-            batch = result.get('workflows', [])
+        while next_url:
+            result = self._make_request('GET', next_url.replace(self.base_url + '/', ''))
+            batch = result.get('results', [])
             workflows.extend(batch)
+            next_url = result.get('next')
             
-            if len(batch) < 100:
-                break
-            page += 1
-        
         logger.info(f"Found {len(workflows)} workflows")
         return workflows
     
@@ -92,23 +89,20 @@ class NextMatterClient:
         result = self._make_request('GET', f'workflows/{workflow_id}/steps')
         return result.get('steps', [])
     
-    def get_processes(self) -> List[Dict[str, Any]]:
-        """Get all processes (workflow instances)"""
-        logger.info("Fetching processes...")
-        processes = []
-        page = 1
+    def get_instances(self) -> List[Dict[str, Any]]:
+        """Get all instances (workflow runs)"""
+        logger.info("Fetching instances...")
+        instances = []
+        next_url = 'instances/'
         
-        while True:
-            result = self._make_request('GET', 'processes', params={'page': page, 'per_page': 100})
-            batch = result.get('processes', [])
-            processes.extend(batch)
+        while next_url:
+            result = self._make_request('GET', next_url.replace(self.base_url + '/', ''))
+            batch = result.get('results', [])
+            instances.extend(batch)
+            next_url = result.get('next')
             
-            if len(batch) < 100:
-                break
-            page += 1
-        
-        logger.info(f"Found {len(processes)} processes")
-        return processes
+        logger.info(f"Found {len(instances)} instances")
+        return instances
     
     def get_process_details(self, process_id: str) -> Dict[str, Any]:
         """Get process details"""
@@ -176,9 +170,22 @@ class NextMatterClient:
         """Test API connection"""
         try:
             logger.info("Testing NextMatter connection...")
-            self._make_request('GET', 'workflows', params={'per_page': 1})
+            self._make_request('GET', 'processes/?limit=1')
             logger.info("✅ NextMatter connection successful")
             return True
         except Exception as e:
             logger.error(f"❌ NextMatter connection failed: {e}")
             return False
+    
+    def create_instance(self, process_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Create a new instance of a workflow"""
+        logger.info(f"Creating instance for process {process_id}")
+        payload = {
+            'process': process_id,
+            'name': data.get('name', ''),
+            'deadline': data.get('deadline'),
+            'priority': data.get('priority', 'M'),  # V=Very High, H=High, M=Medium, L=Low, N=None
+            'tags': data.get('tags', []),
+            'step_assignments': data.get('step_assignments', [])
+        }
+        return self._make_request('POST', 'instances/', json=payload)

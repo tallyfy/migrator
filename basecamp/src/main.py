@@ -161,9 +161,14 @@ class BasecampMigrationOrchestrator:
         logger.info("Starting Discovery Phase...")
         
         discovery_data = {
+            'projects': [],
             'templates': [],
-            'instances': [],
-            'users': [],
+            'people': [],
+            'todos': [],
+            'messages': [],
+            'campfires': [],
+            'schedules': [],
+            'documents': [],
             'statistics': {}
         }
         
@@ -172,19 +177,72 @@ class BasecampMigrationOrchestrator:
             if not self.vendor_client.test_connection():
                 raise Exception("Failed to connect to Basecamp")
             
-            # Discover templates/workflows/forms
-            logger.info("Discovering templates...")
-            # Add vendor-specific discovery logic here
+            # Discover projects
+            logger.info("Discovering projects...")
+            discovery_data['projects'] = self.vendor_client.get_projects()
+            logger.info(f"  Found {len(discovery_data['projects'])} projects")
             
-            # Discover users
-            logger.info("Discovering users...")
-            discovery_data['users'] = self.vendor_client.get_users()
+            # Discover templates
+            logger.info("Discovering templates...")
+            discovery_data['templates'] = self.vendor_client.get_templates()
+            logger.info(f"  Found {len(discovery_data['templates'])} templates")
+            
+            # Discover people
+            logger.info("Discovering people...")
+            discovery_data['people'] = self.vendor_client.get_people()
+            logger.info(f"  Found {len(discovery_data['people'])} people")
+            
+            # Sample project details for deeper discovery
+            for project in discovery_data['projects'][:5]:  # Sample first 5 projects
+                project_id = project['id']
+                logger.info(f"  Analyzing project: {project['name']}")
+                
+                try:
+                    # Get project tools (dock)
+                    tools = self.vendor_client.get_project_tools(project_id)
+                    project['tools'] = tools
+                    
+                    # Get todosets if available
+                    todoset = self.vendor_client.get_todosets(project_id)
+                    if todoset:
+                        project['todoset'] = todoset
+                        todoset_id = todoset.get('id')
+                        
+                        # Get todo lists
+                        todolists = self.vendor_client.get_todolists(project_id, todoset_id)
+                        project['todolists'] = todolists
+                        logger.info(f"    - {len(todolists)} todo lists")
+                        
+                        # Sample todos from first list
+                        if todolists:
+                            first_list = todolists[0]
+                            todos = self.vendor_client.get_todos(project_id, first_list['id'])
+                            discovery_data['todos'].extend(todos[:10])  # Sample 10 todos
+                    
+                    # Check for message board
+                    message_board = next((t for t in tools if t.get('name') == 'message_board'), None)
+                    if message_board:
+                        project['has_messages'] = True
+                        logger.info(f"    - Has message board")
+                    
+                    # Check for campfire (chat)
+                    campfire = next((t for t in tools if t.get('name') == 'campfire'), None)
+                    if campfire:
+                        project['has_campfire'] = True
+                        logger.info(f"    - Has campfire chat")
+                        
+                except Exception as e:
+                    logger.warning(f"Could not analyze project {project_id}: {e}")
             
             # Calculate statistics
             discovery_data['statistics'] = {
+                'total_projects': len(discovery_data['projects']),
                 'total_templates': len(discovery_data['templates']),
-                'total_instances': len(discovery_data['instances']),
-                'total_users': len(discovery_data['users']),
+                'total_people': len(discovery_data['people']),
+                'sampled_todos': len(discovery_data['todos']),
+                'projects_with_messages': sum(1 for p in discovery_data['projects'] if p.get('has_messages')),
+                'projects_with_campfire': sum(1 for p in discovery_data['projects'] if p.get('has_campfire')),
+                'total_todolists': sum(len(p.get('todolists', [])) for p in discovery_data['projects']),
                 'discovered_at': datetime.utcnow().isoformat()
             }
             

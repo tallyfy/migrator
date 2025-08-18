@@ -1,0 +1,48 @@
+You are analyzing Cognito Forms calculations to determine how to implement them in Tallyfy.
+
+Calculation Details:
+- Field Name: {field_name}
+- Calculation Type: {calc_type} (Formula|Aggregate|Conditional|Lookup)
+- Formula: {formula_text}
+- Referenced Fields: {referenced_fields}
+- Dependencies: {dependencies}
+- Update Trigger: {update_trigger}
+- Sample Input/Output: {sample_data}
+
+Cognito Forms Calculation Functions Used:
+{functions_used}
+
+Formula Complexity Analysis:
+- Nesting Level: {nesting_level}
+- Conditional Branches: {conditional_count}
+- Aggregate Functions: {aggregate_count}
+- String Operations: {string_ops}
+- Date Calculations: {date_calcs}
+
+Tallyfy has limited calculation capabilities compared to Cognito Forms.
+Options include:
+1. Static calculation at submission
+2. Manual calculation step
+3. External webhook for complex math
+4. Simplified approximation
+5. Document formula for manual processing
+
+Determine the best approach.
+
+Respond with JSON only:
+{
+  "implementation_strategy": "native_field|calculation_step|webhook|manual|simplified",
+  "tallyfy_formula": "translated formula if possible",
+  "complexity_level": "simple|moderate|complex|impossible",
+  "accuracy_preserved": "full|partial|approximate|manual",
+  "implementation_steps": [
+    {
+      "step": "description",
+      "type": "field|rule|webhook|instruction"
+    }
+  ],
+  "data_loss_risk": "none|minimal|moderate|high",
+  "fallback_approach": "alternative if primary fails",
+  "documentation_needed": "what to document for users",
+  "confidence": 0.0-1.0
+}

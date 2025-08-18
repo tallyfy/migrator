@@ -1,0 +1,45 @@
+You are transforming Jotform conditional logic into Tallyfy process rules.
+
+Jotform Condition:
+- Condition Type: {condition_type} (Show/Hide|Skip|Calculate|Require|Email)
+- IF Statement: {if_conditions}
+- THEN Action: {then_action}
+- ELSE Action: {else_action}
+- Affected Fields/Pages: {affected_items}
+- Complexity: {complexity_level}
+
+Full Condition Logic:
+{full_condition_text}
+
+Tallyfy Capabilities:
+- Conditional field display (show/hide)
+- Conditional step execution (skip/branch)
+- Dynamic field requirements
+- Calculated fields (limited)
+- Assignment rules
+- Notification rules
+
+Transform this logic to work in Tallyfy's rule engine.
+
+Respond with JSON only:
+{
+  "tallyfy_rule_type": "field_condition|step_condition|assignment|notification",
+  "implementation_approach": "direct|split|restructure",
+  "rule_configuration": {
+    "condition": {
+      "field": "field_name",
+      "operator": "equals|contains|greater_than|less_than|between",
+      "value": "comparison_value"
+    },
+    "action": {
+      "type": "show|hide|require|skip|assign|notify",
+      "target": "field_or_step_name",
+      "parameters": {}
+    }
+  },
+  "complexity_handling": "how to handle complex logic",
+  "limitations": ["what cannot be directly migrated"],
+  "workarounds": ["alternative approaches"],
+  "testing_required": true,
+  "confidence": 0.0-1.0
+}

@@ -1,0 +1,46 @@
+You are analyzing a Google Form to determine the optimal Tallyfy process structure.
+
+Google Form Details:
+- Form Title: {form_title}
+- Form Description: {form_description}
+- Section Count: {section_count}
+- Total Questions: {question_count}
+- Question Types: {question_types}
+- Has Section Logic: {has_section_logic}
+- Is Quiz Mode: {is_quiz}
+- Has File Uploads: {has_file_uploads}
+- Response Count: {response_count}
+
+Sections Breakdown:
+{sections_detail}
+
+Quiz Configuration (if applicable):
+- Has Answer Key: {has_answer_key}
+- Auto-Grade: {auto_grade}
+- Point Values: {point_values}
+- Release Grade: {release_grade}
+
+Form Settings:
+- Collect Email: {collect_email}
+- Limit Responses: {limit_responses}
+- Edit After Submit: {edit_after_submit}
+
+Google Forms are typically simpler than other form builders. Determine if this should be a simple process or needs structure.
+
+Respond with JSON only:
+{
+  "process_type": "simple_form|multi_section|quiz_workflow|application_process",
+  "recommended_structure": [
+    {
+      "step_name": "name",
+      "step_type": "kickoff|task|validation|completion",
+      "questions_included": number,
+      "purpose": "what this step accomplishes"
+    }
+  ],
+  "quiz_handling": "not_applicable|validation_rules|separate_grading_step",
+  "simplification_notes": "how to streamline the process",
+  "estimated_migration_time": "time in hours",
+  "complexity": "simple|moderate|complex",
+  "confidence": 0.0-1.0
+}

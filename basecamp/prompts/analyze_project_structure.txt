@@ -1,0 +1,49 @@
+You are analyzing a Basecamp project to determine how to transform it into a Tallyfy process blueprint.
+
+Basecamp Project Details:
+- Project Name: {project_name}
+- Project Description: {project_description}
+- Active Tools: {active_tools}
+- Team Size: {team_size}
+- To-do Lists Count: {todo_lists_count}
+- Total To-dos: {todos_count}
+- Has Message Board: {has_messages}
+- Has Campfire: {has_campfire}
+- Has Schedule: {has_schedule}
+- Has Check-ins: {has_checkins}
+- File Count: {file_count}
+
+To-do Lists Structure:
+{todo_lists_detail}
+
+Project Activity Level:
+- Daily Messages: {daily_messages}
+- Daily Comments: {daily_comments}
+- Completion Rate: {completion_rate}
+
+Basecamp projects are flexible and unstructured. Tallyfy requires defined processes.
+Analyze how to best transform this project into a repeatable process.
+
+Respond with JSON only:
+{
+  "process_type": "linear|parallel|phased|hybrid",
+  "transformation_strategy": "description of approach",
+  "recommended_phases": [
+    {
+      "phase_name": "name",
+      "source": "which Basecamp tool/list",
+      "steps_count": number,
+      "purpose": "what this phase does"
+    }
+  ],
+  "tool_mappings": {
+    "message_board": "how to handle messages",
+    "campfire": "how to handle chat",
+    "schedule": "how to handle events",
+    "docs_files": "how to handle documents"
+  },
+  "complexity": "simple|moderate|complex",
+  "estimated_blueprint_steps": number,
+  "recurring_pattern_detected": true|false,
+  "confidence": 0.0-1.0
+}

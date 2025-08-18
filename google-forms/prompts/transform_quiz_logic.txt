@@ -1,0 +1,45 @@
+You are transforming a Google Forms quiz into a Tallyfy validation workflow.
+
+Quiz Details:
+- Quiz Title: {quiz_title}
+- Total Questions: {question_count}
+- Total Points: {total_points}
+- Question Types: {question_types}
+- Pass Threshold: {pass_threshold}
+
+Questions with Answers:
+{questions_and_answers}
+
+Grading Configuration:
+- Immediate Feedback: {immediate_feedback}
+- Show Missed Questions: {show_missed}
+- Show Correct Answers: {show_correct}
+- Show Point Values: {show_points}
+
+Google Forms quizzes need special handling in Tallyfy since Tallyfy doesn't have native quiz features.
+We need to convert quiz logic into validation rules and scoring mechanisms.
+
+Recommend implementation approach.
+
+Respond with JSON only:
+{
+  "implementation_strategy": "validation_rules|scoring_workflow|manual_review",
+  "answer_validation": [
+    {
+      "question_field": "field_name",
+      "validation_type": "exact_match|contains|pattern",
+      "correct_answer": "answer_value",
+      "points": number,
+      "feedback": "incorrect_message"
+    }
+  ],
+  "scoring_mechanism": "calculated_field|metadata|separate_step",
+  "pass_fail_logic": {
+    "implementation": "conditional_step|approval_gate|notification",
+    "threshold_check": "how to check if passed"
+  },
+  "limitations": ["quiz features that cannot be replicated"],
+  "alternative_approaches": ["other ways to handle quiz"],
+  "user_experience_impact": "minimal|moderate|significant",
+  "confidence": 0.0-1.0
+}

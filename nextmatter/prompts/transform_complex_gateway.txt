@@ -1,0 +1,49 @@
+You are transforming NextMatter's complex gateway logic into Tallyfy's simpler branching system.
+
+Gateway Details:
+- Gateway Type: {gateway_type} (Exclusive|Parallel|Inclusive|Complex)
+- Gateway Name: {gateway_name}
+- Incoming Paths: {incoming_paths}
+- Outgoing Paths: {outgoing_paths}
+- Decision Logic: {decision_logic}
+- Variables Used: {variables}
+
+For Parallel Gateway:
+- Split Type: {split_type} (AND|OR)
+- Join Type: {join_type}
+- Synchronization: {sync_required}
+
+For Exclusive Gateway:
+- Conditions: {conditions_list}
+- Default Path: {default_path}
+- Evaluation Order: {eval_order}
+
+For Complex Gateway:
+- Custom Logic: {custom_logic}
+- Multiple Conditions: {multi_conditions}
+
+NextMatter follows BPMN patterns which are more complex than Tallyfy's branching.
+Determine how to simplify while preserving business logic.
+
+Respond with JSON only:
+{
+  "transformation_approach": "direct_mapping|simplification|restructure|split_process",
+  "tallyfy_implementation": {
+    "branching_type": "conditional|parallel|sequential",
+    "structure": [
+      {
+        "step_name": "step or phase name",
+        "condition": "if applicable",
+        "parallel": true|false,
+        "wait_for": "dependencies"
+      }
+    ]
+  },
+  "logic_preservation": "full|mostly|partial|requires_workaround",
+  "simplification_strategy": "how to simplify complex logic",
+  "risks": ["potential issues with simplification"],
+  "manual_interventions": ["what needs manual handling"],
+  "documentation_needed": "what to document for users",
+  "testing_scenarios": ["critical paths to test"],
+  "confidence": 0.0-1.0
+}

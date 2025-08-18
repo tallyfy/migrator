@@ -161,8 +161,14 @@ class WrikeMigrationOrchestrator:
         logger.info("Starting Discovery Phase...")
         
         discovery_data = {
-            'templates': [],
-            'instances': [],
+            'spaces': [],
+            'folders': [],
+            'workflows': [],
+            'custom_fields': [],
+            'custom_item_types': [],
+            'blueprints': [],
+            'request_forms': [],
+            'tasks': [],
             'users': [],
             'statistics': {}
         }
@@ -172,23 +178,65 @@ class WrikeMigrationOrchestrator:
             if not self.vendor_client.test_connection():
                 raise Exception("Failed to connect to Wrike")
             
-            # Discover templates/workflows/forms
-            logger.info("Discovering templates...")
-            # Add vendor-specific discovery logic here
+            # Discover spaces
+            logger.info("Discovering spaces...")
+            discovery_data['spaces'] = self.vendor_client.get_spaces()
+            logger.info(f"  Found {len(discovery_data['spaces'])} spaces")
+            
+            # Discover folders and projects
+            logger.info("Discovering folders and projects...")
+            for space in discovery_data['spaces']:
+                folders = self.vendor_client.get_folders(space.get('id'))
+                discovery_data['folders'].extend(folders)
+            logger.info(f"  Found {len(discovery_data['folders'])} folders/projects")
+            
+            # Discover workflows
+            logger.info("Discovering workflows...")
+            discovery_data['workflows'] = self.vendor_client.get_workflows()
+            logger.info(f"  Found {len(discovery_data['workflows'])} workflows")
+            
+            # Discover custom fields
+            logger.info("Discovering custom fields...")
+            discovery_data['custom_fields'] = self.vendor_client.get_custom_fields()
+            logger.info(f"  Found {len(discovery_data['custom_fields'])} custom fields")
             
             # Discover users
             logger.info("Discovering users...")
             discovery_data['users'] = self.vendor_client.get_users()
+            logger.info(f"  Found {len(discovery_data['users'])} users")
+            
+            # Sample tasks from active projects (limit for discovery)
+            logger.info("Sampling tasks for analysis...")
+            sample_folders = discovery_data['folders'][:5]  # Sample first 5 folders
+            for folder in sample_folders:
+                tasks = self.vendor_client.get_folder_tasks(folder['id'])
+                discovery_data['tasks'].extend(tasks[:10])  # Sample 10 tasks per folder
+            logger.info(f"  Sampled {len(discovery_data['tasks'])} tasks for analysis")
+            
+            # Analyze custom item types from tasks
+            custom_types = set()
+            for task in discovery_data['tasks']:
+                if 'customItemTypeId' in task:
+                    custom_types.add(task['customItemTypeId'])
+            discovery_data['custom_item_types'] = list(custom_types)
+            logger.info(f"  Found {len(discovery_data['custom_item_types'])} custom item types")
             
             # Calculate statistics
             discovery_data['statistics'] = {
-                'total_templates': len(discovery_data['templates']),
-                'total_instances': len(discovery_data['instances']),
+                'total_spaces': len(discovery_data['spaces']),
+                'total_folders': len(discovery_data['folders']),
+                'total_workflows': len(discovery_data['workflows']),
+                'total_custom_fields': len(discovery_data['custom_fields']),
+                'total_custom_types': len(discovery_data['custom_item_types']),
                 'total_users': len(discovery_data['users']),
+                'sampled_tasks': len(discovery_data['tasks']),
                 'discovered_at': datetime.utcnow().isoformat()
             }
             
-            logger.info(f"Discovery complete: {discovery_data['statistics']}")
+            logger.info("\nDiscovery Summary:")
+            for key, value in discovery_data['statistics'].items():
+                if key != 'discovered_at':
+                    logger.info(f"  {key}: {value}")
             
         except Exception as e:
             logger.error(f"Discovery phase failed: {e}")
