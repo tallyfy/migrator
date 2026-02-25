@@ -19,7 +19,7 @@ class AIClient:
     def __init__(self, api_key: Optional[str] = None):
         """Initialize AI client with optional API key"""
         self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
-        self.model = os.getenv('AI_MODEL', 'claude-opus-4-5-20251101')
+        self.model = os.getenv('AI_MODEL', 'claude-opus-4-6')
         self.temperature = float(os.getenv('AI_TEMPERATURE', '0'))
         self.max_tokens = int(os.getenv('AI_MAX_TOKENS', '500'))
         self.client = None

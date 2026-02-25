@@ -93,7 +93,7 @@ class AIClient:
             
             # Make AI call
             response = self.client.messages.create(
-                model="claude-opus-4-5-20251101",
+                model="claude-opus-4-6",
                 max_tokens=500,
                 temperature=0,
                 system="You are an expert in BPMN to workflow transformation. Respond with JSON only.",
@@ -153,7 +153,7 @@ class AIClient:
             
             # Make AI call
             response = self.client.messages.create(
-                model="claude-opus-4-5-20251101",
+                model="claude-opus-4-6",
                 max_tokens=1000,
                 temperature=0,
                 system="You are an expert in business process optimization. Respond with JSON only.",
@@ -203,7 +203,7 @@ class AIClient:
             
             # Make AI call
             response = self.client.messages.create(
-                model="claude-opus-4-5-20251101",
+                model="claude-opus-4-6",
                 max_tokens=500,
                 temperature=0,
                 system="You are an expert in workflow event handling. Respond with JSON only.",
@@ -260,7 +260,7 @@ class AIClient:
             
             # Make AI call
             response = self.client.messages.create(
-                model="claude-opus-4-5-20251101",
+                model="claude-opus-4-6",
                 max_tokens=500,
                 temperature=0,
                 system="You are an expert in organizational role mapping. Respond with JSON only.",
@@ -305,7 +305,7 @@ class AIClient:
             
             # Make AI call
             response = self.client.messages.create(
-                model="claude-opus-4-5-20251101",
+                model="claude-opus-4-6",
                 max_tokens=500,
                 temperature=0,
                 system="You are an expert in workflow loop handling. Respond with JSON only.",

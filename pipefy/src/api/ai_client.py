@@ -20,7 +20,7 @@ class AIClient:
     """AI-powered decision maker for Pipefy migration challenges."""
     
     def __init__(self, api_key: Optional[str] = None, 
-                 model: str = "claude-opus-4-5-20251101",
+                 model: str = "claude-opus-4-6",
                  temperature: float = 0.0):
         """Initialize AI client for Pipefy migration."""
         self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
