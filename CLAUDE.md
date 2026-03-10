@@ -1,5 +1,8 @@
 # AI Assistant Instructions for Migrator Development
 
+> **NEVER use auto memory** (`~/.claude/projects/*/memory/`) — store all knowledge in this repo's CLAUDE.md file.
+
+
 ## Overview
 This directory contains production-ready migration tools to help organizations migrate from various workflow/BPM/forms vendors to Tallyfy. Each migrator is completely independent and includes AI-powered decision capabilities for handling ambiguous cases.
 
