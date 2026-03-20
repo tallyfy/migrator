@@ -1,0 +1,40 @@
+Analyze this SurveyMonkey survey structure and determine the optimal migration strategy to Tallyfy.
+
+Survey details:
+- Survey title: {survey_title}
+- Total questions: {question_count}
+- Total pages: {page_count}
+- Has skip/page logic: {has_logic}
+- Has piping (variable substitution): {has_piping}
+- Has matrix questions: {has_matrix}
+- Has ranking questions: {has_ranking}
+
+Determine the best strategy:
+1. "single_kickoff" - Keep as single kick-off form (<=15 questions, no logic, <=2 pages)
+2. "multi_step_simple" - Use pages as steps (2-5 pages, moderate questions)
+3. "multi_step_moderate" - Split into 3-5 steps (many questions or complex logic)
+4. "complex_workflow" - Complex multi-step workflow (>60 questions or complex skip logic)
+
+Consider:
+- SurveyMonkey pages as natural step boundaries
+- User cognitive load (too many questions overwhelm users)
+- Logical grouping of related questions (demographics, ratings, open-ended)
+- Page logic/skip patterns that suggest step boundaries
+- Matrix questions need special handling (flattened to textarea)
+- Optimal questions per step (10-15 ideal, max 20)
+
+Respond with JSON:
+{
+  "strategy": "single_kickoff|multi_step_simple|multi_step_moderate|complex_workflow",
+  "complexity": "simple|medium|complex",
+  "recommended_steps": N,
+  "reasoning": "Detailed explanation of the decision",
+  "grouping_suggestions": [
+    {"step_name": "Step 1 Name", "question_count": N, "question_types": ["type1", "type2"]},
+    {"step_name": "Step 2 Name", "question_count": N, "question_types": ["type3", "type4"]}
+  ],
+  "complexity_score": 0.0-1.0,
+  "confidence": 0.0-1.0,
+  "warnings": ["Any issues or concerns"],
+  "manual_review_needed": true/false
+}
