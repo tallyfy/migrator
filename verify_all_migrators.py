@@ -58,7 +58,7 @@ class MigratorVerifier:
         'transform_logic.txt'
     ]
     
-    def __init__(self, base_path: str = '/Users/amit/Documents/GitHub/migrator'):
+    def __init__(self, base_path: str = '~/GitHub/migrator'):
         """Initialize verifier with base path"""
         self.base_path = Path(base_path)
         self.results = {}

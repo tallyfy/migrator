@@ -7,7 +7,7 @@ create_main_py() {
     local VENDOR_NAME=$2
     local CLIENT_NAME=$3
     
-    cat > "/Users/amit/Documents/GitHub/migrator/$MIGRATOR/src/main.py" << EOF
+    cat > "~/GitHub/migrator/$MIGRATOR/src/main.py" << EOF
 #!/usr/bin/env python3
 """
 ${VENDOR_NAME} to Tallyfy Migration Orchestrator

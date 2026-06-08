@@ -57,7 +57,7 @@ def check_migrator(migrator_path: Path) -> Dict[str, bool]:
 def main():
     """Check all migrators for completeness"""
     
-    base_dir = Path('/Users/amit/Documents/GitHub/migrator')
+    base_dir = Path('~/GitHub/migrator')
     
     # List of all migrators to check
     migrators = [

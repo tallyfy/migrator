@@ -6,36 +6,36 @@ echo "Fixing incomplete migrators..."
 
 # Fix Asana
 echo "Fixing Asana..."
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/api/ai_client.py /Users/amit/Documents/GitHub/migrator/asana/src/api/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/utils/error_handler.py /Users/amit/Documents/GitHub/migrator/asana/src/utils/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/utils/checkpoint_manager.py /Users/amit/Documents/GitHub/migrator/asana/src/utils/
+cp ~/GitHub/migrator/rocketlane/src/api/ai_client.py ~/GitHub/migrator/asana/src/api/
+cp ~/GitHub/migrator/rocketlane/src/utils/error_handler.py ~/GitHub/migrator/asana/src/utils/
+cp ~/GitHub/migrator/rocketlane/src/utils/checkpoint_manager.py ~/GitHub/migrator/asana/src/utils/
 
 # Fix Kissflow
 echo "Fixing Kissflow..."
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/api/ai_client.py /Users/amit/Documents/GitHub/migrator/kissflow/src/api/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/transformers/template_transformer.py /Users/amit/Documents/GitHub/migrator/kissflow/src/transformers/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/utils/logger_config.py /Users/amit/Documents/GitHub/migrator/kissflow/src/utils/
+cp ~/GitHub/migrator/rocketlane/src/api/ai_client.py ~/GitHub/migrator/kissflow/src/api/
+cp ~/GitHub/migrator/rocketlane/src/transformers/template_transformer.py ~/GitHub/migrator/kissflow/src/transformers/
+cp ~/GitHub/migrator/rocketlane/src/utils/logger_config.py ~/GitHub/migrator/kissflow/src/utils/
 
 # Fix Monday
 echo "Fixing Monday..."
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/api/ai_client.py /Users/amit/Documents/GitHub/migrator/monday/src/api/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/transformers/template_transformer.py /Users/amit/Documents/GitHub/migrator/monday/src/transformers/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/utils/logger_config.py /Users/amit/Documents/GitHub/migrator/monday/src/utils/
+cp ~/GitHub/migrator/rocketlane/src/api/ai_client.py ~/GitHub/migrator/monday/src/api/
+cp ~/GitHub/migrator/rocketlane/src/transformers/template_transformer.py ~/GitHub/migrator/monday/src/transformers/
+cp ~/GitHub/migrator/rocketlane/src/utils/logger_config.py ~/GitHub/migrator/monday/src/utils/
 
 # Fix Pipefy
 echo "Fixing Pipefy..."
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/transformers/template_transformer.py /Users/amit/Documents/GitHub/migrator/pipefy/src/transformers/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/transformers/instance_transformer.py /Users/amit/Documents/GitHub/migrator/pipefy/src/transformers/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/transformers/user_transformer.py /Users/amit/Documents/GitHub/migrator/pipefy/src/transformers/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/utils/error_handler.py /Users/amit/Documents/GitHub/migrator/pipefy/src/utils/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/utils/checkpoint_manager.py /Users/amit/Documents/GitHub/migrator/pipefy/src/utils/
+cp ~/GitHub/migrator/rocketlane/src/transformers/template_transformer.py ~/GitHub/migrator/pipefy/src/transformers/
+cp ~/GitHub/migrator/rocketlane/src/transformers/instance_transformer.py ~/GitHub/migrator/pipefy/src/transformers/
+cp ~/GitHub/migrator/rocketlane/src/transformers/user_transformer.py ~/GitHub/migrator/pipefy/src/transformers/
+cp ~/GitHub/migrator/rocketlane/src/utils/error_handler.py ~/GitHub/migrator/pipefy/src/utils/
+cp ~/GitHub/migrator/rocketlane/src/utils/checkpoint_manager.py ~/GitHub/migrator/pipefy/src/utils/
 
 # Fix Process Street
 echo "Fixing Process Street..."
 # Check if process_street_client.py exists, if not copy a template
-if [ ! -f "/Users/amit/Documents/GitHub/migrator/process-street/src/api/process_street_client.py" ]; then
+if [ ! -f "~/GitHub/migrator/process-street/src/api/process_street_client.py" ]; then
     # Create a basic Process Street client based on the pattern
-    cat > /Users/amit/Documents/GitHub/migrator/process-street/src/api/process_street_client.py << 'EOF'
+    cat > ~/GitHub/migrator/process-street/src/api/process_street_client.py << 'EOF'
 """
 Process Street API Client
 Handles all interactions with Process Street API
@@ -172,9 +172,9 @@ class ProcessStreetClient:
 EOF
 fi
 
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/transformers/field_transformer.py /Users/amit/Documents/GitHub/migrator/process-street/src/transformers/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/transformers/instance_transformer.py /Users/amit/Documents/GitHub/migrator/process-street/src/transformers/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/utils/error_handler.py /Users/amit/Documents/GitHub/migrator/process-street/src/utils/
-cp /Users/amit/Documents/GitHub/migrator/rocketlane/src/utils/checkpoint_manager.py /Users/amit/Documents/GitHub/migrator/process-street/src/utils/
+cp ~/GitHub/migrator/rocketlane/src/transformers/field_transformer.py ~/GitHub/migrator/process-street/src/transformers/
+cp ~/GitHub/migrator/rocketlane/src/transformers/instance_transformer.py ~/GitHub/migrator/process-street/src/transformers/
+cp ~/GitHub/migrator/rocketlane/src/utils/error_handler.py ~/GitHub/migrator/process-street/src/utils/
+cp ~/GitHub/migrator/rocketlane/src/utils/checkpoint_manager.py ~/GitHub/migrator/process-street/src/utils/
 
 echo "Done fixing incomplete migrators!"

@@ -6,7 +6,7 @@ from pathlib import Path
 from collections import defaultdict
 
 # Define the base directory
-BASE_DIR = Path("/Users/amit/Documents/GitHub/migrator")
+BASE_DIR = Path("~/GitHub/migrator")
 
 # List of migrators to check
 MIGRATORS = [

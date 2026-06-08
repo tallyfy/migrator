@@ -16,7 +16,7 @@ MIGRATORS=(
 for MIGRATOR in "${MIGRATORS[@]}"; do
     echo "Creating transformers for $MIGRATOR..."
     
-    TRANSFORM_DIR="/Users/amit/Documents/GitHub/migrator/$MIGRATOR/src/transformers"
+    TRANSFORM_DIR="~/GitHub/migrator/$MIGRATOR/src/transformers"
     mkdir -p "$TRANSFORM_DIR"
     
     # Create field transformer if it doesn't exist
