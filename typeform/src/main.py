@@ -471,8 +471,14 @@ class TypeformMigrator:
                     
                     if not self.dry_run:
                         try:
+                            # create_run takes discrete arguments, not the whole
+                            # transformed process dict.
                             result = self.error_handler.with_retry(
-                                lambda: self.tallyfy.create_run(process)
+                                lambda p=process: self.tallyfy.create_run(
+                                    checklist_id=p['checklist_id'],
+                                    name=p['name'],
+                                    prerun_data=p.get('prerun', {})
+                                )
                             )
                             
                             if result:

@@ -394,14 +394,23 @@ class TallyfyClient:
         if 'status' not in process_data:
             process_data['status'] = 'active'
         
-        # Handle prerun_data if present - MUST be object format, not array
-        if 'prerun_data' in process_data and isinstance(process_data['prerun_data'], list):
-            # Convert array to object format
-            prerun_obj = {}
-            for item in process_data['prerun_data']:
-                if isinstance(item, dict) and 'field_id' in item and 'value' in item:
-                    prerun_obj[item['field_id']] = item['value']
-            process_data['prerun_data'] = prerun_obj
+        # The API request key is `prerun`. A body sent as `prerun_data` is
+        # silently discarded by the API, losing every kick-off value, and any
+        # required kick-off field then fails the launch with a 422. The value
+        # must be an object keyed by each field's timeline_id, never a list.
+        # `prerun_data` is still accepted on input for backwards compatibility,
+        # but it is always rewritten to `prerun` before the request is sent.
+        legacy_prerun = process_data.pop('prerun_data', None)
+        prerun = process_data.get('prerun', legacy_prerun)
+        if prerun:
+            if isinstance(prerun, list):
+                # Convert array to object format
+                prerun_obj = {}
+                for item in prerun:
+                    if isinstance(item, dict) and 'field_id' in item and 'value' in item:
+                        prerun_obj[str(item['field_id'])] = item['value']
+                prerun = prerun_obj
+            process_data['prerun'] = dict(prerun)
         
         result = self._make_request('POST', f'/api/organizations/{self.organization_id}/runs', json=process_data)
         

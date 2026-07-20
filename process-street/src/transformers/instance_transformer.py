@@ -8,6 +8,11 @@ from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 import json
 
+try:  # Typed encoder: keys kick-off values by timeline_id and encodes per type.
+    from shared.prerun_encoder import build_prerun_payload
+except ImportError:  # Standalone deployment without the shared package.
+    build_prerun_payload = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,7 +39,9 @@ class InstanceTransformer:
     
     def transform_project(self, project: Dict[str, Any],
                          template_mapping: Dict[str, str],
-                         user_mapping: Dict[str, str]) -> Dict[str, Any]:
+                         user_mapping: Dict[str, str],
+                         kickoff_fields: Optional[List[Dict[str, Any]]] = None
+                         ) -> Dict[str, Any]:
         """
         Transform a RocketLane project to Tallyfy process
         
@@ -42,7 +49,10 @@ class InstanceTransformer:
             project: RocketLane project instance
             template_mapping: Mapping of RocketLane template IDs to Tallyfy blueprint IDs
             user_mapping: Mapping of RocketLane user IDs to Tallyfy user IDs
-            
+            kickoff_fields: The Tallyfy template's kick-off field definitions.
+                Supply these so kick-off values are keyed by timeline_id and
+                encoded per field type -- without them the API discards them.
+
         Returns:
             Tallyfy process structure
         """
@@ -65,7 +75,7 @@ class InstanceTransformer:
                 'status': project.get('status'),
                 'health': project.get('health_status')
             },
-            'prerun_data': {},  # Kickoff form data
+            'prerun': {},  # Kickoff form data
             'tasks': []
         }
         
@@ -77,8 +87,8 @@ class InstanceTransformer:
         
         # Transform project fields to prerun data
         if project.get('custom_fields'):
-            process['prerun_data'] = self._transform_custom_fields(
-                project['custom_fields']
+            process['prerun'] = self._transform_custom_fields(
+                project['custom_fields'], kickoff_fields
             )
         
         # Transform project phases and tasks
@@ -176,8 +186,23 @@ class InstanceTransformer:
         
         return context
     
-    def _transform_custom_fields(self, fields: Dict[str, Any]) -> Dict[str, str]:
-        """Transform custom field values to prerun data"""
+    def _transform_custom_fields(self, fields: Dict[str, Any],
+                                 kickoff_fields: Optional[List[Dict[str, Any]]] = None
+                                 ) -> Dict[str, Any]:
+        """
+        Build the `prerun` object from custom field values.
+
+        With the template's kick-off field definitions, each value is keyed by
+        its field's timeline_id and encoded for its field type, so dropdown,
+        multi-select, table and assignee fields keep their structure instead of
+        being flattened to a string.
+
+        Without them the values are stringified as before; the API keys strictly
+        by timeline_id, so those values will not be stored.
+        """
+        if kickoff_fields and build_prerun_payload is not None:
+            return build_prerun_payload(fields, kickoff_fields)
+
         prerun_data = {}
         
         for field_id, value in fields.items():

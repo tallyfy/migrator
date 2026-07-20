@@ -77,6 +77,45 @@ def transform_kanban_phase(phase):
 **AI Solution**: Analyzes data characteristics for optimal batch size
 **Fallback**: Conservative batching (10-50 items based on size)
 
+## Tallyfy API Contract: Kick-off ("prerun") Data
+
+**The launch request key is `prerun`. It is NOT `prerun_data`.** The API reads
+`prerun` (`RunRequestValidator` reads `prerun` and `prerun.<timeline_id>`), so a body
+carrying `prerun_data` is silently ignored: every kick-off value is discarded, and any
+required kick-off field fails the launch with a 422.
+
+**Its value is an OBJECT keyed by each kick-off field's 32-char `timeline_id`** -- never a
+list, and never keyed by field name, label, or the source system's field id:
+
+```json
+{"prerun": {"a1b2c3d4e5f60718293a4b5c6d7e8f90": "Acme Corp"}}
+```
+
+Do not confuse this with template *creation*, where `prerun` is legitimately an array of
+field **definitions**. At launch it is an object of field **values**.
+
+**Per-field value shapes are type-dependent** (see `shared/prerun_encoder.py`, which
+mirrors the proven middleware implementation):
+
+| field_type | value |
+|---|---|
+| `text`, `textarea`, `email` | bare scalar |
+| `date` | bare scalar, ISO-8601 string |
+| `radio` | the chosen option's **text**, as a bare scalar |
+| `dropdown` | `{"id": <option id>, "text": "<exact option text>"}` (both keys required) |
+| `multiselect` | list of `{"id":.., "text":..}`, each with `"selected": true` |
+| `table` | list with exactly one entry per defined column |
+| `assignees_form` | `{"users": [int], "guests": ["email"], "groups": [id]}` |
+
+`dropdown` and `radio` are deliberately **asymmetric**. Do not "harmonise" them.
+
+Use `shared/prerun_encoder.py` (`build_prerun_payload`) rather than stringifying values --
+stringifying breaks dropdown, multi-select, table and assignee fields. It needs the
+template's kick-off field definitions to resolve source keys to `timeline_id`; without
+them the keys pass through unchanged and the API discards the data.
+
+`shared/tests/test_prerun_request_key.py` pins this contract across every vendor client.
+
 ## Critical Rules for All Migrators
 
 ### 1. Independence Rule (MANDATORY)

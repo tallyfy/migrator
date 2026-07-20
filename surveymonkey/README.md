@@ -397,8 +397,9 @@ Based on the ACTUAL api-v2 implementation, these are the correct field types:
 
 #### Prerun/Kickoff Form Data
 - Stored in `field` table with checklist class_id
-- Request key is `prerun_data` (object), NOT `prerun` (array)
-- Format: `{"field_id": "value"}` not array of objects
+- Launch request key is `prerun` (the API never reads `prerun_data`)
+- Format: `{"<timeline_id>": value}` -- an object keyed by each field's
+  32-char `timeline_id`, never an array and never keyed by field name
 
 #### Field Validation
 Instead of `type`, use Laravel validation rules:

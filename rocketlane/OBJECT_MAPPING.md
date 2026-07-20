@@ -196,7 +196,7 @@ This document provides exhaustive mapping between RocketLane and Tallyfy objects
 | project.owner | process.metadata.owner | Direct | Project owner |
 | project.value | process.metadata.value | Direct | Project value |
 | project.estimated_end_date | process.metadata.target_completion | Direct | Target date |
-| project.custom_fields | process.prerun_data | Object → Object | Field values |
+| project.custom_fields | process.prerun | Object → Object keyed by timeline_id | Field values |
 | project.phases[] | process.tasks[] | Complex | Phase transformation |
 | project.tasks[] | process.tasks[] | Array mapping | Task transformation |
 | project.time_entries[] | Comments | Time → Text | Time tracking |

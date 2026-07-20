@@ -502,7 +502,7 @@ class SurveyMonkeyMigrator:
                             result = self.tallyfy.create_run(
                                 process['checklist_id'],
                                 process['name'],
-                                process.get('prerun_data')
+                                process.get('prerun')
                             )
 
                             if result:

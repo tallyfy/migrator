@@ -536,15 +536,15 @@ class RocketLaneMigrationOrchestrator:
                             logger.warning(f"Template not found for project {project['name']}, skipping")
                             continue
                         
-                        # Create process in Tallyfy
-                        process_data = {
-                            'checklist_id': template_id,
-                            'title': transformed['title'],
-                            'prerun_data': transformed.get('prerun_data', {}),
-                            'external_ref': project['id']
-                        }
-                        
-                        created_process = self.tallyfy_client.create_run(process_data)
+                        # Create process in Tallyfy. create_run takes discrete
+                        # arguments, and the transformer emits `name`/`prerun`.
+                        # The source project id is preserved via the checkpoint
+                        # mapping recorded below.
+                        created_process = self.tallyfy_client.create_run(
+                            checklist_id=template_id,
+                            name=transformed['name'],
+                            prerun_data=transformed.get('prerun', {})
+                        )
                         
                         # Migrate task states
                         for task in full_project.get('tasks', []):

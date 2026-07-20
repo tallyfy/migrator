@@ -38,7 +38,7 @@ class InstanceTransformer:
         process = {
             'checklist_id': blueprint_id,
             'name': f"Response from {respondent['name']} - {response_id[:8]}",
-            'prerun_data': prerun_data,
+            'prerun': prerun_data,
             'metadata': {
                 'source': 'typeform',
                 'typeform_response_id': response_id,

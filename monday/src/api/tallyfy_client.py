@@ -186,17 +186,20 @@ class TallyfyClient:
             'name': name,
             'organization_id': self.organization_id
         }
+        # The API request key is `prerun`. A body sent as `prerun_data` is
+        # silently discarded by the API, losing every kick-off value, and any
+        # required kick-off field then fails the launch with a 422. The value
+        # must be an object keyed by each field's timeline_id, never a list.
         if data:
-            # Handle prerun_data - MUST be object format, not array
             if isinstance(data, list):
                 # Convert array to object format
                 prerun_obj = {}
                 for item in data:
                     if isinstance(item, dict) and 'field_id' in item and 'value' in item:
-                        prerun_obj[item['field_id']] = item['value']
-                payload['prerun_data'] = prerun_obj
+                        prerun_obj[str(item['field_id'])] = item['value']
+                payload['prerun'] = prerun_obj
             else:
-                payload['prerun_data'] = data
+                payload['prerun'] = dict(data)
             
         response = self.session.post(f"{self.base_url}/api/organizations/{self.organization_id}/runs", json=payload)
         response.raise_for_status()

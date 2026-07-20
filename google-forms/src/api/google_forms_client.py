@@ -254,7 +254,7 @@ class GoogleFormsClient:
         return {
             'checklist_id': blueprint_id,
             'name': f"Response {response.get('responseId', 'Unknown')}",
-            'prerun_data': prerun_data,
+            'prerun': prerun_data,
             'metadata': {
                 'source': 'google_forms',
                 'response_id': response.get('responseId'),

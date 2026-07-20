@@ -3,11 +3,17 @@ Base Form Migrator
 Shared functionality for form-based migration tools (Typeform, Jotform, Google Forms, Cognito Forms)
 """
 
+import json
 import os
 import logging
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 from abc import ABC, abstractmethod
+
+try:  # imported as part of the `shared` package
+    from .prerun_encoder import build_prerun_payload
+except ImportError:  # imported as a top-level module (sys.path includes shared/)
+    from prerun_encoder import build_prerun_payload
 
 logger = logging.getLogger(__name__)
 
@@ -440,19 +446,31 @@ class FormMigratorBase(ABC):
         return groups
     
     def transform_responses_to_processes(self, form_id: str, blueprint_id: str,
-                                        limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Transform form responses to Tallyfy processes"""
+                                        limit: Optional[int] = None,
+                                        kickoff_fields: Optional[List[Dict[str, Any]]] = None
+                                        ) -> List[Dict[str, Any]]:
+        """
+        Transform form responses to Tallyfy processes.
+
+        Args:
+            form_id: Source form identifier.
+            blueprint_id: Target Tallyfy template id.
+            limit: Optional cap on the number of responses transformed.
+            kickoff_fields: The template's kick-off field definitions. Supply
+                these so values are keyed by timeline_id and encoded per field
+                type -- without them the API discards the kick-off data.
+        """
         responses = self.get_form_responses(form_id)
-        
+
         if limit:
             responses = responses[:limit]
-        
+
         processes = []
         for response in responses:
             process = {
                 'checklist_id': blueprint_id,
                 'name': f"Submission from {response.get('submitter', 'Anonymous')}",
-                'prerun_data': self._extract_response_data(response),
+                'prerun': self._extract_response_data(response, kickoff_fields),
                 'metadata': {
                     'source': self.vendor_name,
                     'original_response_id': response.get('id'),
@@ -464,17 +482,36 @@ class FormMigratorBase(ABC):
         
         return processes
     
-    def _extract_response_data(self, response: Dict[str, Any]) -> Dict[str, str]:
-        """Extract response data for prerun"""
-        data = {}
-        
+    def _extract_response_data(self, response: Dict[str, Any],
+                               kickoff_fields: Optional[List[Dict[str, Any]]] = None
+                               ) -> Dict[str, Any]:
+        """
+        Build the `prerun` object from a form response.
+
+        With the template's kick-off field definitions, each answer is keyed by
+        its field's timeline_id and encoded for its field type, so choice, table
+        and assignee fields keep their structure instead of being stringified.
+
+        Without them the raw keys and values are passed through unchanged; the
+        API keys strictly by timeline_id, so those values will not be stored.
+        """
         answers = response.get('answers', response.get('data', {}))
-        
+
+        if kickoff_fields:
+            return build_prerun_payload(answers, kickoff_fields)
+
+        logger.warning(
+            "Building prerun data for %s without kick-off field definitions; "
+            "pass kickoff_fields so values are keyed by timeline_id",
+            self.vendor_name,
+        )
+
+        data: Dict[str, Any] = {}
         for field_id, value in answers.items():
             if value is not None:
                 if isinstance(value, (list, dict)):
                     data[field_id] = json.dumps(value)
                 else:
                     data[field_id] = str(value)
-        
+
         return data

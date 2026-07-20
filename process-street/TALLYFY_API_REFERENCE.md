@@ -90,8 +90,8 @@ PUT    /api/organizations/{org}/runs/{id}
   "checklist_id": "abc123...",
   "name": "Process Name",
   "owner_id": 123,
-  "prerun_data": {
-    "field_id": "value"
+  "prerun": {
+    "<32-char timeline_id>": "value"
   }
 }
 ```
@@ -116,4 +116,23 @@ PUT    /api/organizations/{org}/runs/{id}
 ❌ Using 'file_upload' → ✅ Use 'file'
 ❌ Using integer IDs → ✅ Use 32-char strings
 ❌ Missing org_id in path → ✅ Include /organizations/{org_id}/
-❌ Using 'prerun' array → ✅ Use 'prerun_data' object
+❌ Launching with a 'prerun_data' key, or with a 'prerun' array
+   → ✅ Launch with a 'prerun' OBJECT keyed by each field's timeline_id
+
+
+## Kick-off (prerun) Value Shapes
+
+When launching a process, `prerun` is an object keyed by each kick-off field's
+32-char `timeline_id`. The value shape depends on the field type:
+
+| field_type | value |
+|---|---|
+| `text`, `textarea`, `email` | bare scalar |
+| `date` | bare scalar, ISO-8601 string |
+| `radio` | the chosen option's **text**, as a bare scalar |
+| `dropdown` | `{"id": <option id>, "text": "<exact option text>"}` (both keys) |
+| `multiselect` | list of `{"id":.., "text":..}`, each with `"selected": true` |
+| `table` | list with exactly one entry per defined column |
+| `assignees_form` | `{"users": [int], "guests": ["email"], "groups": [id]}` |
+
+`dropdown` and `radio` are deliberately asymmetric -- do not harmonise them.

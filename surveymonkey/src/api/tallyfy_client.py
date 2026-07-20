@@ -242,6 +242,27 @@ class TallyfyClient:
         return {'success': True, 'fields_added': len(prerun_fields)}
 
     # Process/Run Management
+    @staticmethod
+    def _normalize_prerun(prerun_data: Any) -> Dict[str, Any]:
+        """
+        Coerce kick-off data into the object form the API requires.
+
+        The API keys kick-off values by each field's timeline_id; a list is
+        never accepted. A list of {"field_id": .., "value": ..} entries is
+        folded into an object.
+        """
+        if not prerun_data:
+            return {}
+
+        if isinstance(prerun_data, list):
+            normalized = {}
+            for item in prerun_data:
+                if isinstance(item, dict) and 'field_id' in item and 'value' in item:
+                    normalized[str(item['field_id'])] = item['value']
+            return normalized
+
+        return dict(prerun_data)
+
     def create_run(self, checklist_id: str, name: str,
                   prerun_data: Dict = None) -> Dict[str, Any]:
         """
@@ -250,7 +271,8 @@ class TallyfyClient:
         Args:
             checklist_id: Template ID
             name: Process name
-            prerun_data: Kick-off form data (as object, not array!)
+            prerun_data: Kick-off form data. Sent as the `prerun` request key,
+                as an object keyed by each field's timeline_id (never a list).
 
         Returns:
             Created run
@@ -263,9 +285,11 @@ class TallyfyClient:
             'status': 'active'
         }
 
-        # Add prerun data if provided (MUST be object, not array)
+        # The API request key is `prerun`. A body sent as `prerun_data` is
+        # silently discarded by the API, losing every kick-off value, and any
+        # required kick-off field then fails the launch with a 422.
         if prerun_data:
-            data['prerun_data'] = prerun_data  # Object format: {"field_id": "value"}
+            data['prerun'] = self._normalize_prerun(prerun_data)
 
         return self._make_request('POST', '/runs', json=data)
 
