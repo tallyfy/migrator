@@ -54,6 +54,34 @@ LEGACY_PRERUN_KEY = 'prerun_data'
 # Matches the middleware's email validation for assignees_form values.
 EMAIL_REGEX = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
 
+
+class PrerunEncodingError(ValueError):
+    """Base class for kick-off value encoding failures."""
+
+
+class TableShapeError(PrerunEncodingError):
+    """
+    A table value does not have exactly one entry per defined column.
+
+    The API validates ``count($values) !== count($capture->columns)`` and returns
+    422, so a mismatch can never be launched. It is raised here, where the
+    offending field is known, rather than sent for the API to reject opaquely.
+    """
+
+
+class UnresolvedFieldError(PrerunEncodingError):
+    """
+    Source values could not be matched to any kick-off field on the template.
+
+    Sending them anyway is not a safe fallback: the API keys strictly by
+    timeline_id and silently discards everything else, returning 201 with the
+    values gone.
+    """
+
+    def __init__(self, message: str, unresolved: Sequence[Any]):
+        super().__init__(message)
+        self.unresolved = list(unresolved)
+
 # Date fields are rendered as ISO-8601 with milliseconds, mirroring the
 # middleware default moment format 'YYYY-MM-DDTHH:mm:ss.SSS[Z]'.
 SCALAR_FIELD_TYPES = frozenset({'text', 'textarea', 'email', 'short_text', 'long_text'})
@@ -164,12 +192,13 @@ def _encode_table(value: Any, capture: Dict[str, Any]) -> Any:
         return aligned
 
     if isinstance(value, list) and len(value) != len(columns):
-        logger.warning(
-            "Table field %r has %d entries but %d columns are defined; "
-            "sending it unchanged for the API to validate",
-            capture.get('label') or capture.get('alias') or capture.get('id'),
-            len(value),
-            len(columns),
+        # The API validates count($values) !== count($capture->columns) and
+        # returns 422. Sending it is a guaranteed failed launch, so fail here
+        # where the field and both counts are known.
+        raise TableShapeError(
+            f"Table field {capture.get('label') or capture.get('alias') or capture.get('id')!r} "
+            f"has {len(value)} entries but {len(columns)} columns are defined. "
+            "The API requires exactly one entry per column and returns 422 otherwise."
         )
 
     return value
@@ -394,6 +423,8 @@ def normalize_prerun_object(value: Any) -> Dict[str, Any]:
 def build_prerun_payload(
     values: Any,
     captures: Optional[Sequence[Dict[str, Any]]] = None,
+    *,
+    strict: bool = False,
     **options: Any,
 ) -> Dict[str, Any]:
     """
@@ -407,16 +438,32 @@ def build_prerun_payload(
             typed correctly. When omitted the keys are passed through unchanged
             and a warning is logged -- the API keys strictly by ``timeline_id``,
             so unresolved keys are discarded server-side.
+        strict: Raise instead of dropping values that cannot be resolved to a
+            kick-off field. Live migration paths should pass ``strict=True``:
+            a dropped value is invisible (the launch still returns 201), so
+            silence there means silent data loss.
         **options: Forwarded to :func:`encode_field_value`.
 
     Returns:
         An object keyed by ``timeline_id``, ready to send as ``{"prerun": ...}``.
+
+    Raises:
+        UnresolvedFieldError: In strict mode, when definitions are missing or a
+            value cannot be matched to a kick-off field.
+        TableShapeError: When a table value does not match its column count.
     """
     normalized = normalize_prerun_object(values)
     if not normalized:
         return {}
 
     if not captures:
+        if strict:
+            raise UnresolvedFieldError(
+                "Cannot build prerun data without the template's kick-off field "
+                "definitions: the API keys strictly by timeline_id, so every "
+                f"value would be discarded. Unresolvable keys: {sorted(map(str, normalized))}",
+                list(normalized),
+            )
         logger.warning(
             "Building prerun data without kick-off field definitions; keys are sent "
             "unchanged and the API will discard any that are not a timeline_id"
@@ -424,9 +471,12 @@ def build_prerun_payload(
         return normalized
 
     payload: Dict[str, Any] = {}
+    unresolved: List[Any] = []
+
     for key, raw_value in normalized.items():
         capture = resolve_capture(key, captures)
         if capture is None:
+            unresolved.append(key)
             logger.warning(
                 "No kick-off field matches %r; its value will not be migrated", key
             )
@@ -434,11 +484,24 @@ def build_prerun_payload(
 
         timeline_id = capture.get('timeline_id') or capture.get('id')
         if timeline_id is None:
+            unresolved.append(key)
             logger.warning(
                 "Kick-off field %r has no timeline_id; its value will not be migrated", key
             )
             continue
 
         payload[str(timeline_id)] = encode_field_value(raw_value, capture, **options)
+
+    if unresolved and strict:
+        available = [
+            str(c.get('label') or c.get('alias') or c.get('id'))
+            for c in captures if isinstance(c, dict)
+        ]
+        raise UnresolvedFieldError(
+            f"{len(unresolved)} kick-off value(s) could not be matched to a field on "
+            f"the target template and would be silently discarded: "
+            f"{sorted(map(str, unresolved))}. Available kick-off fields: {available}",
+            unresolved,
+        )
 
     return payload

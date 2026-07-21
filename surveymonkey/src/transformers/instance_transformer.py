@@ -4,9 +4,26 @@ Transforms SurveyMonkey survey responses to Tallyfy processes
 """
 
 import logging
+import os
+import sys
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
+
+# Vendor entry points run as scripts, so only `surveymonkey/src` is on sys.path
+# and `import shared` would fail. Prepend the repo root so the shared encoder is
+# genuinely importable rather than silently falling back to the untyped path.
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+try:  # Typed encoder: keys kick-off values by timeline_id and encodes per type.
+    from shared.prerun_encoder import build_prerun_payload
+except ImportError as _exc:  # Standalone deployment without the shared package.
+    build_prerun_payload = None
+    _ENCODER_IMPORT_ERROR = _exc
+else:
+    _ENCODER_IMPORT_ERROR = None
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +37,15 @@ class InstanceTransformer:
         logger.info("SurveyMonkey instance transformer initialized")
 
     def transform(self, response: Dict[str, Any], blueprint_id: str,
-                 survey_structure: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Transform single SurveyMonkey response to Tallyfy process"""
+                 survey_structure: Optional[Dict[str, Any]] = None,
+                 kickoff_fields: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """
+        Transform single SurveyMonkey response to Tallyfy process.
+
+        kickoff_fields: the target template's kick-off field definitions, needed
+        to key prerun values by timeline_id. Without them the API accepts the
+        launch and silently discards every value.
+        """
 
         # Extract response metadata
         response_id = response.get('id', '')
@@ -41,18 +65,57 @@ class InstanceTransformer:
                         'subtype': question.get('subtype', '')
                     }
 
-        # Extract answers from response pages
-        prerun_data = {}
+        # Extract answers from response pages.
+        #
+        # The key must end up as the Tallyfy kick-off field's timeline_id. A
+        # SurveyMonkey question id is not one, so values are keyed by the
+        # question HEADING -- the identifier shared with the Tallyfy kick-off
+        # field, whose label was generated from it -- and then resolved to
+        # timeline_ids by the shared encoder. Keying by `field_<question id>`
+        # (the previous behaviour) meant the API discarded every value.
+        raw_values: Dict[str, Any] = {}
+        unnamed: List[str] = []
         for page in response.get('pages', []):
             for question in page.get('questions', []):
                 question_id = question.get('id', '')
-                field_key = f"field_{question_id}"
+                definition = question_map.get(question_id, {})
 
                 answers = question.get('answers', [])
-                value = self._extract_answer_value(answers, question_map.get(question_id, {}))
+                value = self._extract_answer_value(answers, definition)
+                if value is None:
+                    continue
 
-                if value is not None:
-                    prerun_data[field_key] = value
+                heading = definition.get('heading')
+                if not heading:
+                    unnamed.append(question_id or '<unknown>')
+                    continue
+
+                raw_values[heading] = value
+
+        if unnamed:
+            raise ValueError(
+                "Cannot map SurveyMonkey answers to Tallyfy kick-off fields: no "
+                f"heading is available for question id(s) {sorted(set(unnamed))}. "
+                "Pass the full survey structure to transform()."
+            )
+
+        prerun_data: Dict[str, Any] = {}
+        if raw_values:
+            if build_prerun_payload is None:
+                raise RuntimeError(
+                    "The shared prerun encoder is unavailable, so kick-off values "
+                    "cannot be keyed by timeline_id and would be silently discarded "
+                    f"by the API. Original import error: {_ENCODER_IMPORT_ERROR}"
+                )
+            if not kickoff_fields:
+                raise ValueError(
+                    "Cannot build prerun data without the target template's kick-off "
+                    "field definitions. SurveyMonkey question ids and headings are not "
+                    "Tallyfy timeline_ids, so the API would discard every value. Fetch "
+                    "them with shared.kickoff_fields.KickoffFieldCache and pass them "
+                    "as kickoff_fields."
+                )
+            prerun_data = build_prerun_payload(raw_values, kickoff_fields, strict=True)
 
         # Get respondent info
         respondent = self._get_respondent_info(response)
@@ -250,13 +313,14 @@ class InstanceTransformer:
         return respondent
 
     def transform_batch(self, responses: List[Dict[str, Any]], blueprint_id: str,
-                       survey_structure: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                       survey_structure: Optional[Dict[str, Any]] = None,
+                       kickoff_fields: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
         """Transform multiple responses"""
         processes = []
 
         for response in responses:
             try:
-                process = self.transform(response, blueprint_id, survey_structure)
+                process = self.transform(response, blueprint_id, survey_structure, kickoff_fields)
                 processes.append(process)
             except Exception as e:
                 logger.error(f"Failed to transform response {response.get('id')}: {e}")
@@ -317,7 +381,9 @@ class InstanceTransformer:
         return analysis
 
     def map_partial_response(self, response: Dict[str, Any], blueprint_id: str,
-                            survey_structure: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+                            survey_structure: Optional[Dict[str, Any]] = None,
+                            kickoff_fields: Optional[List[Dict[str, Any]]] = None
+                            ) -> Optional[Dict[str, Any]]:
         """Handle partial/incomplete responses"""
 
         response_status = response.get('response_status', 'completed')
@@ -332,7 +398,7 @@ class InstanceTransformer:
 
             if strategy and strategy.get('confidence', 0) > 0.7:
                 if strategy['action'] == 'create_draft':
-                    process = self.transform(response, blueprint_id, survey_structure)
+                    process = self.transform(response, blueprint_id, survey_structure, kickoff_fields)
                     process['status'] = 'draft'
                     process['metadata']['partial'] = True
                     return process
@@ -343,7 +409,7 @@ class InstanceTransformer:
         if response_status == 'partial':
             completion = self._calculate_completion(response, survey_structure)
             if completion > 50:
-                process = self.transform(response, blueprint_id, survey_structure)
+                process = self.transform(response, blueprint_id, survey_structure, kickoff_fields)
                 process['status'] = 'draft'
                 process['metadata']['partial'] = True
                 return process

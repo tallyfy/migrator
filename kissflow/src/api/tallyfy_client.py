@@ -1,10 +1,23 @@
 """Tallyfy API client for Kissflow migration."""
 
+import os
+import sys
+
 import requests
 import logging
 from typing import Dict, List, Optional, Any
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+# Vendor entry points run as scripts, so only the vendor root is on sys.path and
+# `import shared` would fail. Prepend the repo root so the shared encoder and the
+# kick-off field cache are genuinely importable.
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from shared.kickoff_fields import KickoffFieldCache
+from shared.prerun_encoder import build_prerun_payload
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +52,10 @@ class TallyfyClient:
         self.organization_id = organization_id
         self.base_url = base_url.rstrip('/')
         self.session = self._create_session()
+
+        # Kick-off field definitions per template, fetched once and reused, so
+        # launch payloads can be keyed by timeline_id.
+        self._kickoff_field_cache = KickoffFieldCache(self)
         
     def _create_session(self) -> requests.Session:
         """Create HTTP session with retry strategy."""
@@ -162,7 +179,34 @@ class TallyfyClient:
         response = self.session.post(f"{self.base_url}/api/organizations/{self.organization_id}/checklists", json=data)
         response.raise_for_status()
         return response.json()
-    
+
+    def get_checklist(self, checklist_id: str) -> Dict[str, Any]:
+        """Get a blueprint (template), including its kick-off field definitions.
+
+        The response carries the template's kick-off fields as an inlined
+        `prerun` array, where each entry's `id` is the `timeline_id` that the
+        launch payload must be keyed by. Without this the migration cannot know
+        a timeline_id, and the API discards every kick-off value it sends.
+
+        Args:
+            checklist_id: Blueprint ID
+
+        Returns:
+            Checklist object
+        """
+        # NOTE: base_url already ends in `/api` (see the constructor default), so
+        # the path continues at `/organizations` -- matching test_connection.
+        # `create_blueprint` and `create_process` in this same client build
+        # `{base_url}/api/organizations/...`, which double-prefixes to
+        # `/api/api/organizations/...`. That is a PRE-EXISTING defect on those
+        # two methods, left unchanged here because correcting a live launch
+        # endpoint is outside this fix and needs verification against the API.
+        response = self.session.get(
+            f"{self.base_url}/organizations/{self.organization_id}/checklists/{checklist_id}"
+        )
+        response.raise_for_status()
+        return response.json()
+
     def create_process(self, checklist_id: str, name: str,
                       data: Optional[Dict] = None) -> Dict[str, Any]:
         """Create a process (running instance).
@@ -184,20 +228,30 @@ class TallyfyClient:
         # silently discarded by the API, losing every kick-off value, and any
         # required kick-off field then fails the launch with a 422. The value
         # must be an object keyed by each field's timeline_id, never a list.
+        #
+        # Resolution happens HERE rather than in the transformer because this is
+        # the single choke point every Kissflow launch passes through (process
+        # instances, board cards and app records all land here). An optional
+        # `kickoff_fields` argument on the transformer would just be another
+        # parameter nobody passes -- which is exactly how this data was being
+        # discarded unnoticed.
         if data:
-            if isinstance(data, list):
-                # Convert array to object format
-                prerun_obj = {}
-                for item in data:
-                    if isinstance(item, dict) and 'field_id' in item and 'value' in item:
-                        prerun_obj[str(item['field_id'])] = item['value']
-                payload['prerun'] = prerun_obj
-            else:
-                payload['prerun'] = dict(data)
-            
+            payload['prerun'] = self._resolve_prerun(checklist_id, data)
+
         response = self.session.post(f"{self.base_url}/api/organizations/{self.organization_id}/runs", json=payload)
         response.raise_for_status()
         return response.json()
+
+    def _resolve_prerun(self, checklist_id: str, data: Any) -> Dict[str, Any]:
+        """
+        Key kick-off values by the target template's timeline_ids.
+
+        Kissflow keys its values by field NAME, which is the identifier shared
+        with the Tallyfy kick-off field's label; the encoder resolves those to
+        timeline_ids and encodes each value for its field type.
+        """
+        kickoff_fields = self._kickoff_field_cache.require(checklist_id)
+        return build_prerun_payload(data, kickoff_fields, strict=True)
     
     def update_task(self, task_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """Update a task.

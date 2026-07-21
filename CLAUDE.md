@@ -114,7 +114,35 @@ stringifying breaks dropdown, multi-select, table and assignee fields. It needs 
 template's kick-off field definitions to resolve source keys to `timeline_id`; without
 them the keys pass through unchanged and the API discards the data.
 
-`shared/tests/test_prerun_request_key.py` pins this contract across every vendor client.
+Fetch those definitions with `shared/kickoff_fields.py` (`KickoffFieldCache`), which reads
+the checklist's inlined `prerun` array -- each entry's `id` **is** the `timeline_id`
+(`PrerunTransformer` maps `'id' => $prerun->timeline_id`). The adjacent `alias` is a trap:
+keying by it returns 201 with `prerun: {}` and every value lost.
+
+Pass `strict=True` on live paths. A dropped key is invisible -- the launch still returns
+201 -- so a silent encoder is silent data loss.
+
+### ⚠️ Known gap: templates are created WITHOUT kick-off fields
+
+**No vendor currently creates kick-off fields on a Tallyfy template.** Every template is
+created with an empty `prerun` array, so there is nothing for launch values to key against.
+
+- `add_kickoff_form()` exists in 11 vendor clients (e.g. `typeform/src/api/tallyfy_client.py:234`,
+  POSTing to `/checklists/{id}/preruns`) and has **zero callers**. It looks like the intended
+  implementation, never wired into any orchestrator.
+- `create_checklist()` POSTs only `{id,title,summary,organization_id,status,is_template}`.
+  The `kickoff_form` dict that template transformers build is silently dropped.
+- Step `captures` (form fields on a step) ARE created. Those are a different thing from
+  template-level kick-off fields -- do not conflate them.
+
+Until `add_kickoff_form` is wired, the instance/launch phase for a form vendor will
+correctly raise `NoKickoffFieldsDefined` rather than launch processes whose kick-off data
+would be discarded. Fixing that is the prerequisite for kick-off data migrating at all.
+
+`shared/tests/test_prerun_request_key.py` pins the request key across every vendor client.
+`shared/tests/test_prerun_wiring.py` pins that the encoder is actually REACHED on live
+paths and that keys are timeline_ids -- the request-key test alone passed for months while
+every live path still sent source-system ids.
 
 ## Critical Rules for All Migrators
 

@@ -237,9 +237,23 @@ class GoogleFormsClient:
             
             return blueprint
     
-    def transform_response_to_process(self, response: Dict[str, Any], 
+    def transform_response_to_process(self, response: Dict[str, Any],
                                      blueprint_id: str) -> Dict[str, Any]:
-        """Transform form response to Tallyfy process"""
+        """Transform form response to Tallyfy process.
+
+        DEAD CODE -- DO NOT WIRE THIS UP AS-IS.
+
+        It has no callers, and the `prerun` object it builds is keyed by
+        `field_<google question id>`. The API keys kick-off values strictly by
+        each field's `timeline_id`, so every value here would be accepted with a
+        201 and then silently discarded.
+
+        It also duplicates `shared/form_migrator_base.py::transform_responses_to_processes`,
+        which already routes through `shared/prerun_encoder.py` and resolves keys
+        to timeline_ids properly. Use that one instead, and delete this method
+        rather than reviving it. Transformation logic does not belong in an API
+        client in any case.
+        """
         answers = response.get('answers', {})
         
         # Extract response data

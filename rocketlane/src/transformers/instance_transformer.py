@@ -4,14 +4,28 @@ Handles active project to process conversion with state preservation
 """
 
 import logging
+import os
+import sys
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 import json
 
+# This module runs as part of a script (`python rocketlane/src/main.py`), so only
+# `rocketlane/src` lands on sys.path and `import shared` would fail. Prepend the
+# repo root so the shared encoder is genuinely importable. Without this the
+# import below silently yields None and every kick-off value is stringified with
+# source-system keys, which the API discards.
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
 try:  # Typed encoder: keys kick-off values by timeline_id and encodes per type.
     from shared.prerun_encoder import build_prerun_payload
-except ImportError:  # Standalone deployment without the shared package.
+except ImportError as _exc:  # Standalone deployment without the shared package.
     build_prerun_payload = None
+    _ENCODER_IMPORT_ERROR = _exc
+else:
+    _ENCODER_IMPORT_ERROR = None
 
 logger = logging.getLogger(__name__)
 
@@ -200,21 +214,30 @@ class InstanceTransformer:
         Without them the values are stringified as before; the API keys strictly
         by timeline_id, so those values will not be stored.
         """
-        if kickoff_fields and build_prerun_payload is not None:
-            return build_prerun_payload(fields, kickoff_fields)
+        if not fields:
+            return {}
 
-        prerun_data = {}
-        
-        for field_id, value in fields.items():
-            # Convert value to string format expected by Tallyfy
-            if isinstance(value, bool):
-                prerun_data[field_id] = 'yes' if value else 'no'
-            elif isinstance(value, (list, dict)):
-                prerun_data[field_id] = json.dumps(value)
-            elif value is not None:
-                prerun_data[field_id] = str(value)
-        
-        return prerun_data
+        if build_prerun_payload is None:
+            raise RuntimeError(
+                "The shared prerun encoder is unavailable, so kick-off values cannot "
+                "be keyed by timeline_id and would be silently discarded by the API. "
+                f"Original import error: {_ENCODER_IMPORT_ERROR}"
+            )
+
+        if not kickoff_fields:
+            # Previously this stringified the values under RocketLane's own field
+            # ids. The API keys strictly by timeline_id, so those launches
+            # returned 201 with every kick-off value dropped. Failing here makes
+            # the loss visible instead.
+            raise ValueError(
+                "Cannot build prerun data without the target template's kick-off "
+                "field definitions. RocketLane custom-field ids are not Tallyfy "
+                "timeline_ids, so the API would discard every value. Fetch the "
+                "definitions (shared.kickoff_fields.KickoffFieldCache) and pass "
+                "them as kickoff_fields."
+            )
+
+        return build_prerun_payload(fields, kickoff_fields, strict=True)
     
     def _transform_phases_and_tasks(self, process: Dict, phases: List[Dict],
                                    user_mapping: Dict[str, str]):

@@ -13,7 +13,7 @@ body it would put on the wire.
 import importlib.util
 import os
 import sys
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -43,6 +43,25 @@ def load_client(vendor):
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module.TallyfyClient
+
+
+def patch_checklist_fetch(client):
+    """
+    Mock the template fetch used to resolve kick-off field timeline_ids.
+
+    Clients that resolve keys locally (kissflow) fetch the target template's
+    kick-off field definitions before launching. Returning a definition whose
+    `id` IS the timeline_id under test lets the encoder resolve it to itself,
+    so this helper is a no-op for clients that do not fetch.
+    """
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {
+        'id': 'checklist-1',
+        'prerun': [{'id': TIMELINE_ID, 'alias': 'company_name',
+                    'label': 'Company Name', 'field_type': 'text'}],
+    }
+    return patch.object(client.session, 'get', return_value=response)
 
 
 def assert_prerun_contract(body):
@@ -89,7 +108,7 @@ def test_create_process_sends_prerun_key(vendor):
     client_cls = load_client(vendor)
     client = client_cls(api_token='test-token', organization_id='test-org')
 
-    with patch.object(client.session, 'post') as mock_post:
+    with patch_checklist_fetch(client), patch.object(client.session, 'post') as mock_post:
         mock_post.return_value.raise_for_status.return_value = None
         mock_post.return_value.json.return_value = {}
         client.create_process('checklist-1', 'My Process', {TIMELINE_ID: 'Acme Corp'})
@@ -102,7 +121,7 @@ def test_create_process_converts_a_list_into_an_object(vendor):
     client_cls = load_client(vendor)
     client = client_cls(api_token='test-token', organization_id='test-org')
 
-    with patch.object(client.session, 'post') as mock_post:
+    with patch_checklist_fetch(client), patch.object(client.session, 'post') as mock_post:
         mock_post.return_value.raise_for_status.return_value = None
         mock_post.return_value.json.return_value = {}
         client.create_process(

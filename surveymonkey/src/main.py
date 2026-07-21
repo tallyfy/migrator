@@ -27,6 +27,11 @@ from src.utils.validator import MigrationValidator
 from src.utils.error_handler import ErrorHandler
 from src.utils.logger_config import setup_logger
 
+# The repo root holds the shared package; the sys.path line above only adds the
+# surveymonkey vendor root, so `import shared` would fail without this.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from shared.kickoff_fields import KickoffFieldCache, KickoffFieldError
+
 logger = setup_logger(__name__)
 
 
@@ -57,6 +62,11 @@ class SurveyMonkeyMigrator:
             self.ai_client
         )
         self.instance_transformer = InstanceTransformer(self.ai_client)
+
+        # Kick-off field definitions per template, fetched once and reused. The
+        # launch payload must be keyed by each field's timeline_id, which only
+        # the target template knows.
+        self.kickoff_fields = KickoffFieldCache(self.tallyfy)
         self.user_transformer = UserTransformer()
 
         # Initialize utilities
@@ -486,11 +496,21 @@ class SurveyMonkeyMigrator:
 
                 logger.info(f"  - Found {len(response_items)} responses")
 
+                # Kick-off field definitions for the target template. Without
+                # them every prerun value is discarded by the API, so a failure
+                # here must skip the survey rather than launch empty processes.
+                try:
+                    kickoff_fields = self.kickoff_fields.require(blueprint_id)
+                except KickoffFieldError as e:
+                    logger.error(f"  - Cannot migrate responses for {survey_title}: {e}")
+                    continue
+
                 # Transform responses
                 processes = self.instance_transformer.transform_batch(
                     response_items,
                     blueprint_id,
-                    survey  # Pass full survey structure for question mapping
+                    survey,  # Pass full survey structure for question mapping
+                    kickoff_fields
                 )
 
                 # Create processes in Tallyfy

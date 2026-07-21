@@ -30,6 +30,11 @@ from utils.validator import MigrationValidator
 from utils.error_handler import ErrorHandler
 from utils.logger_config import setup_logging
 
+# The repo root holds the shared package; the sys.path line above only adds
+# rocketlane/src, so `import shared` would fail without this.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from shared.kickoff_fields import KickoffFieldCache
+
 logger = logging.getLogger(__name__)
 
 
@@ -83,6 +88,11 @@ class RocketLaneMigrationOrchestrator:
         self.template_transformer = TemplateTransformer(self.ai_client)
         self.instance_transformer = InstanceTransformer(self.ai_client)
         self.user_transformer = UserTransformer(self.ai_client)
+
+        # Kick-off field definitions per template, fetched once and reused. The
+        # launch payload must be keyed by each field's timeline_id, which only
+        # the target template knows.
+        self.kickoff_fields = KickoffFieldCache(self.tallyfy_client)
         
         # Initialize validator
         self.validator = MigrationValidator(
@@ -327,7 +337,7 @@ class RocketLaneMigrationOrchestrator:
                     created_user = self.tallyfy_client.create_user(transformed_user)
                     
                     # Store mapping
-                    self.checkpoint_manager.add_mapping('user', user['id'], created_user['id'])
+                    self.checkpoint_manager.save_id_mapping(user['id'], created_user['id'], 'user')
                     results['users']['successful'] += 1
                     
                 except Exception as e:
@@ -345,12 +355,12 @@ class RocketLaneMigrationOrchestrator:
                         # Create as guest users
                         transformed_customer = self.user_transformer.transform_customer_to_guest(customer)
                         created_guest = self.tallyfy_client.create_guest(transformed_customer)
-                        self.checkpoint_manager.add_mapping('customer', customer['id'], created_guest['id'])
+                        self.checkpoint_manager.save_id_mapping(customer['id'], created_guest['id'], 'customer')
                     else:
                         # Create as organizations
                         transformed_org = self.user_transformer.transform_customer_to_organization(customer)
                         created_org = self.tallyfy_client.create_organization(transformed_org)
-                        self.checkpoint_manager.add_mapping('customer', customer['id'], created_org['id'])
+                        self.checkpoint_manager.save_id_mapping(customer['id'], created_org['id'], 'customer')
                     
                     results['customers']['successful'] += 1
                     
@@ -430,7 +440,7 @@ class RocketLaneMigrationOrchestrator:
                                 )
                         
                         # Store mapping
-                        self.checkpoint_manager.add_mapping('template', template['id'], blueprint['id'])
+                        self.checkpoint_manager.save_id_mapping(template['id'], blueprint['id'], 'template')
                         results['templates']['successful'] += 1
                         
                         logger.debug(f"✓ Migrated template: {template.get('name')}")
@@ -464,7 +474,7 @@ class RocketLaneMigrationOrchestrator:
                     else:
                         created = self.tallyfy_client.create_kickoff_form(transformed['form'])
                     
-                    self.checkpoint_manager.add_mapping('form', form['id'], created['id'])
+                    self.checkpoint_manager.save_id_mapping(form['id'], created['id'], 'form')
                     results['forms']['successful'] += 1
                     
                 except Exception as e:
@@ -526,16 +536,33 @@ class RocketLaneMigrationOrchestrator:
                     try:
                         # Get full project details
                         full_project = self.rocketlane_client.get_project(project['id'])
-                        
-                        # Transform project to process
-                        transformed = self.instance_transformer.transform_project(full_project)
-                        
-                        # Get template mapping
-                        template_id = self.checkpoint_manager.get_mapping('template', project.get('template_id'))
+
+                        # Resolve the target template FIRST: transforming the
+                        # project needs the template's kick-off field definitions
+                        # to key prerun values by timeline_id.
+                        source_template_id = project.get('template_id')
+                        template_id = self.checkpoint_manager.get_id_mapping(
+                            source_template_id, 'template'
+                        )
                         if not template_id:
                             logger.warning(f"Template not found for project {project['name']}, skipping")
                             continue
-                        
+
+                        # Kick-off field definitions for this template, fetched
+                        # once and cached. Without them the prerun values would
+                        # be keyed by RocketLane ids and silently discarded.
+                        kickoff_fields = self.kickoff_fields.get(template_id)
+
+                        # Transform project to process. transform_project requires
+                        # the template and user mappings; calling it with only the
+                        # project raised TypeError before any prerun data existed.
+                        transformed = self.instance_transformer.transform_project(
+                            full_project,
+                            {source_template_id: template_id},
+                            self.checkpoint_manager.get_all_id_mappings('user'),
+                            kickoff_fields,
+                        )
+
                         # Create process in Tallyfy. create_run takes discrete
                         # arguments, and the transformer emits `name`/`prerun`.
                         # The source project id is preserved via the checkpoint
@@ -591,7 +618,7 @@ class RocketLaneMigrationOrchestrator:
                                     results['time_entries']['failed'] += 1
                         
                         # Store mapping
-                        self.checkpoint_manager.add_mapping('project', project['id'], created_process['id'])
+                        self.checkpoint_manager.save_id_mapping(project['id'], created_process['id'], 'project')
                         results['projects']['successful'] += 1
                         
                         logger.debug(f"✓ Migrated project: {project.get('name')}")
@@ -767,7 +794,7 @@ class RocketLaneMigrationOrchestrator:
     
     def _get_user_mapping(self, rocketlane_user_id: str) -> Optional[str]:
         """Get Tallyfy user ID from RocketLane user ID"""
-        return self.checkpoint_manager.get_mapping('user', rocketlane_user_id)
+        return self.checkpoint_manager.get_id_mapping(rocketlane_user_id, 'user')
     
     def _generate_manual_review_list(self, validation_results: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Generate list of items requiring manual review"""

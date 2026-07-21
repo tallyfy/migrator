@@ -4,9 +4,26 @@ Transforms Typeform responses to Tallyfy processes
 """
 
 import logging
+import os
+import sys
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
+
+# Vendor entry points run as scripts, so only `typeform/src` is on sys.path and
+# `import shared` would fail. Prepend the repo root so the shared encoder is
+# genuinely importable rather than silently falling back to the untyped path.
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+try:  # Typed encoder: keys kick-off values by timeline_id and encodes per type.
+    from shared.prerun_encoder import build_prerun_payload
+except ImportError as _exc:  # Standalone deployment without the shared package.
+    build_prerun_payload = None
+    _ENCODER_IMPORT_ERROR = _exc
+else:
+    _ENCODER_IMPORT_ERROR = None
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +36,16 @@ class InstanceTransformer:
         self.ai_client = ai_client
         logger.info("Typeform instance transformer initialized")
     
-    def transform(self, response: Dict[str, Any], blueprint_id: str, 
-                 form_structure: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Transform single Typeform response to Tallyfy process"""
+    def transform(self, response: Dict[str, Any], blueprint_id: str,
+                 form_structure: Optional[Dict[str, Any]] = None,
+                 kickoff_fields: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """
+        Transform single Typeform response to Tallyfy process.
+
+        kickoff_fields: the target template's kick-off field definitions. They
+        are required to key prerun values by timeline_id; without them the API
+        silently discards every value.
+        """
         
         # Extract response metadata
         response_id = response.get('response_id', response.get('token', ''))
@@ -29,7 +53,7 @@ class InstanceTransformer:
         
         # Extract answers
         answers = response.get('answers', [])
-        prerun_data = self._extract_answers(answers, form_structure)
+        prerun_data = self._extract_answers(answers, form_structure, kickoff_fields)
         
         # Get respondent info
         respondent = self._get_respondent_info(response)
@@ -60,30 +84,87 @@ class InstanceTransformer:
         
         return process
     
-    def _extract_answers(self, answers: List[Dict[str, Any]], 
-                        form_structure: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
-        """Extract answers as prerun data"""
-        prerun_data = {}
-        
+    @staticmethod
+    def _field_titles(form_structure: Optional[Dict[str, Any]]) -> Dict[str, str]:
+        """Map each Typeform field id to its human-readable title."""
+        titles: Dict[str, str] = {}
+        for field in (form_structure or {}).get('fields', []) or []:
+            if not isinstance(field, dict):
+                continue
+            field_id = field.get('id')
+            title = field.get('title')
+            if field_id and title:
+                titles[str(field_id)] = title
+        return titles
+
+    def _extract_answers(self, answers: List[Dict[str, Any]],
+                        form_structure: Optional[Dict[str, Any]] = None,
+                        kickoff_fields: Optional[List[Dict[str, Any]]] = None
+                        ) -> Dict[str, Any]:
+        """
+        Build the `prerun` object from a Typeform response.
+
+        The key must end up as the Tallyfy kick-off field's timeline_id. A
+        Typeform field id is not one, so values are first keyed by the field's
+        TITLE -- the only identifier shared with the Tallyfy kick-off field
+        (whose label was generated from it) -- and then resolved to timeline_ids
+        by the shared encoder.
+
+        Previously this keyed by `field_<typeform id>` AND wrote the same value
+        a second time under `ref_<typeform ref>`, doubling the payload. Both
+        keys were discarded by the API, which keys strictly by timeline_id.
+        """
+        titles = self._field_titles(form_structure)
+        values: Dict[str, Any] = {}
+        unnamed: List[str] = []
+
         for answer in answers:
-            field_id = answer.get('field', {}).get('id', '')
-            field_ref = answer.get('field', {}).get('ref', '')
+            field = answer.get('field', {}) or {}
+            field_id = str(field.get('id', ''))
             field_type = answer.get('type', '')
-            
-            # Use field ID as key
-            field_key = f"field_{field_id}"
-            
-            # Extract value based on answer type
+
             value = self._extract_answer_value(answer, field_type)
-            
-            if value is not None:
-                prerun_data[field_key] = value
-            
-            # Also store by ref if available
-            if field_ref:
-                prerun_data[f"ref_{field_ref}"] = value
-        
-        return prerun_data
+            if value is None:
+                continue
+
+            # Prefer the form's title; fall back to the title on the answer's
+            # own field object if the form structure was not supplied.
+            title = titles.get(field_id) or field.get('title')
+            if not title:
+                unnamed.append(field_id or '<unknown>')
+                continue
+
+            values[title] = value
+
+        if unnamed:
+            # Without a title there is no way to match the Tallyfy kick-off
+            # field, and a guessed key is silently dropped server-side.
+            raise ValueError(
+                "Cannot map Typeform answers to Tallyfy kick-off fields: no title "
+                f"is available for field id(s) {sorted(set(unnamed))}. Pass the form "
+                "structure (form['fields'] with 'id' and 'title') to transform()."
+            )
+
+        if not values:
+            return {}
+
+        if build_prerun_payload is None:
+            raise RuntimeError(
+                "The shared prerun encoder is unavailable, so kick-off values cannot "
+                "be keyed by timeline_id and would be silently discarded by the API. "
+                f"Original import error: {_ENCODER_IMPORT_ERROR}"
+            )
+
+        if not kickoff_fields:
+            raise ValueError(
+                "Cannot build prerun data without the target template's kick-off "
+                "field definitions. Typeform field ids and titles are not Tallyfy "
+                "timeline_ids, so the API would accept the launch and discard every "
+                "value. Fetch them with shared.kickoff_fields.KickoffFieldCache and "
+                "pass them as kickoff_fields."
+            )
+
+        return build_prerun_payload(values, kickoff_fields, strict=True)
     
     def _extract_answer_value(self, answer: Dict[str, Any], field_type: str) -> Optional[str]:
         """Extract value from answer based on type"""
@@ -187,13 +268,14 @@ class InstanceTransformer:
         return respondent
     
     def transform_batch(self, responses: List[Dict[str, Any]], blueprint_id: str,
-                       form_structure: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+                       form_structure: Optional[Dict[str, Any]] = None,
+                       kickoff_fields: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
         """Transform multiple responses"""
         processes = []
         
         for response in responses:
             try:
-                process = self.transform(response, blueprint_id, form_structure)
+                process = self.transform(response, blueprint_id, form_structure, kickoff_fields)
                 processes.append(process)
             except Exception as e:
                 logger.error(f"Failed to transform response {response.get('response_id')}: {e}")
