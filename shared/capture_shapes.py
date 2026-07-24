@@ -81,6 +81,12 @@ _FIELD_TYPE_ALIASES = {
     'url': 'text',
     'datetime': 'date',
     'due_date': 'date',
+    'user': 'assignees_form',
+    'users': 'assignees_form',
+    'member': 'assignees_form',
+    'members': 'assignees_form',
+    'assignee_select': 'assignees_form',
+    'files': 'file',
 }
 
 
