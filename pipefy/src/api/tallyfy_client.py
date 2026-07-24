@@ -465,7 +465,13 @@ class TallyfyClient:
     # Form/field Methods
     def create_capture(self, entity_type: str, entity_id: str, capture_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Create a field (form field) for an entity
+        Create a capture (form field) for an entity.
+
+        FieldTransformer emits ``type`` with options under ``config.options``
+        as ``{value, label}`` dicts.  The Tallyfy captures endpoint expects
+        ``field_type`` at the top level, ``select`` mapped to ``dropdown``,
+        and top-level ``options`` with ``{id, text}`` keys.  Normalise here
+        so callers can pass transformer output unchanged.
         
         Args:
             entity_type: Type of entity (checklist, step, process)
@@ -473,16 +479,47 @@ class TallyfyClient:
             capture_data: field field configuration
             
         Returns:
-            Created field object
+            Created capture object
         """
+        capture_data = dict(capture_data)
+
         if 'id' not in capture_data:
             capture_data['id'] = self._generate_hash_id('cap')
-        
-        endpoint = f'/{entity_type}s/{entity_id}/field'
+
+        # Remap ``type`` → ``field_type`` (FieldTransformer emits ``type``).
+        if 'type' in capture_data and 'field_type' not in capture_data:
+            ft = capture_data.pop('type')
+            # Tallyfy has ``dropdown``, not ``select``
+            capture_data['field_type'] = 'dropdown' if ft == 'select' else ft
+
+        # Validate field type
+        if 'field_type' in capture_data:
+            if capture_data['field_type'] not in self.FIELD_TYPES:
+                logger.warning(
+                    "Invalid field type: %s, defaulting to 'text'",
+                    capture_data['field_type'],
+                )
+                capture_data['field_type'] = 'text'
+
+        # Lift options from ``config.options`` to top-level ``options`` and
+        # remap each entry from ``{value, label}`` to ``{id, text}``.
+        config = capture_data.get('config')
+        if isinstance(config, dict) and 'options' in config and 'options' not in capture_data:
+            raw_options = config.pop('options')
+            capture_data['options'] = [
+                {
+                    'id': opt.get('id', opt.get('value', '')),
+                    'text': opt.get('text', opt.get('label', '')),
+                }
+                for opt in raw_options
+                if isinstance(opt, dict)
+            ]
+
+        endpoint = f'/{entity_type}s/{entity_id}/captures'
         result = self._make_request('POST', endpoint, json=capture_data)
         
-        self.stats['data_imported'].setdefault('field', 0)
-        self.stats['data_imported']['field'] += 1
+        self.stats['data_imported'].setdefault('captures', 0)
+        self.stats['data_imported']['captures'] += 1
         
         return result
     
