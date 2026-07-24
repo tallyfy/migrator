@@ -194,8 +194,11 @@ def normalize_capture(capture: Dict[str, Any], position: Optional[int] = None) -
     label = normalized.get('label') or normalized.get('name') or normalized.get('title')
     normalized['label'] = str(label) if label is not None else 'Untitled field'
 
-    # ``required`` must be PRESENT and boolean.
-    normalized['required'] = bool(normalized.get('required', False))
+    # ``required`` must be PRESENT and boolean.  Some transformers (Pipefy,
+    # Process Street) emit ``is_required`` instead of ``required``.
+    normalized['required'] = bool(
+        normalized.get('required', normalized.get('is_required', False))
+    )
 
     # Options may arrive nested under ``config``.
     config = normalized.get('config')

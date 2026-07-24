@@ -142,6 +142,15 @@ class TestNormalizeCapture:
         assert normalize_capture({'label': 'X'})['required'] is False
         assert normalize_capture({'label': 'X', 'required': 1})['required'] is True
 
+    def test_is_required_alias_is_honoured(self):
+        """Pipefy and Process Street emit ``is_required`` instead of ``required``."""
+        assert normalize_capture({'label': 'X', 'is_required': True})['required'] is True
+        assert normalize_capture({'label': 'X', 'is_required': False})['required'] is False
+
+    def test_explicit_required_takes_precedence_over_is_required(self):
+        out = normalize_capture({'label': 'X', 'required': True, 'is_required': False})
+        assert out['required'] is True
+
     def test_options_are_lifted_from_config_and_rekeyed(self):
         out = normalize_capture({
             'label': 'Plan', 'type': 'select',
