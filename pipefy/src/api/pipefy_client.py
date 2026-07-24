@@ -406,6 +406,7 @@ class PipefyClient:
                                         type
                                     }
                                     value
+                                    array_value
                                     filled_at
                                     updated_at
                                 }
