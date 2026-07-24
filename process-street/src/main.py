@@ -399,7 +399,7 @@ class MigrationOrchestrator:
                 
                 # Extract steps for separate creation
                 steps = tallyfy_checklist.pop('steps', [])
-                field = tallyfy_checklist.pop('field', [])
+                template_captures = tallyfy_checklist.pop('field', [])
                 
                 # Create checklist in Tallyfy
                 created_checklist = self.tallyfy_client.create_checklist(tallyfy_checklist)
@@ -410,13 +410,15 @@ class MigrationOrchestrator:
                     step_captures = step.pop('field', [])
                     created_step = self.tallyfy_client.create_step(checklist_id, step)
                     
-                    # Create field for step
-                    for field in step_captures:
-                        self.tallyfy_client.create_capture('step', created_step['id'], field)
+                    # Create captures for step
+                    for capture in step_captures:
+                        self.tallyfy_client.create_capture('step', created_step['id'], capture)
+                        self._store_field_label(capture)
                 
-                # Create template-level field
-                for field in field:
-                    self.tallyfy_client.create_capture('multiselect', checklist_id, field)
+                # Create template-level captures
+                for capture in template_captures:
+                    self.tallyfy_client.create_capture('multiselect', checklist_id, capture)
+                    self._store_field_label(capture)
                 
                 successful += 1
                 logger.debug(f"Created template: {tallyfy_checklist.get('title', 'Untitled')}")
@@ -607,6 +609,13 @@ class MigrationOrchestrator:
                     ) or 'system'
                     
                     self.tallyfy_client.complete_step(run_id, step_id, completed_by)
+
+    def _store_field_label(self, capture: Dict[str, Any]):
+        """Store a source-field-id to label mapping for value resolution."""
+        ps_field_id = capture.get('external_ref')
+        label = capture.get('label')
+        if ps_field_id and label:
+            self.id_mapper.add_mapping(ps_field_id, label, 'field_label')
     
     def _migrate_form_values(self, ps_run: Dict, run_id: str):
         """
@@ -634,12 +643,19 @@ class MigrationOrchestrator:
             if value in (None, ''):
                 continue
             # Prefer the capture id this field was mapped to at template time,
-            # and keep the Process Street field id as a fallback so a value
-            # still resolves when that mapping is missing.
+            # and keep the Process Street field id AND its label as fallbacks
+            # so a value still resolves by label when the mapped id does not
+            # match any live timeline_id on the target process.
             key = self.id_mapper.get_tallyfy_id(field_id, "field") or field_id
             raw_values[key] = value
+            fallbacks = []
             if str(key) != str(field_id):
-                hints[key] = [field_id]
+                fallbacks.append(field_id)
+            label = self.id_mapper.get_tallyfy_id(field_id, 'field_label')
+            if label and label not in fallbacks and str(label) != str(key):
+                fallbacks.append(label)
+            if fallbacks:
+                hints[key] = fallbacks
 
         if not raw_values:
             return

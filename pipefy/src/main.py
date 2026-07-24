@@ -415,28 +415,35 @@ class PipefyMigrationOrchestrator:
                 # Transform pipe to checklist
                 checklist_data = self._transform_pipe_to_checklist(full_pipe)
                 
+                # Extract steps and captures for separate creation
+                steps = checklist_data.pop('steps', [])
+                template_captures = checklist_data.pop('field', [])
+                
                 # Create checklist in Tallyfy
-                created_checklist = self.tallyfy_client.create_checklist(checklist_data['multiselect'])
+                created_checklist = self.tallyfy_client.create_checklist(checklist_data)
                 checklist_id = created_checklist['id']
                 
                 # Map pipe ID
                 self.id_mapper.add_mapping(pipe['id'], checklist_id, 'multiselect')
                 
                 # Create steps (transformed from phases)
-                for step_group in checklist_data['step_groups']:
-                    for step in step_group['steps']:
-                        created_step = self.tallyfy_client.create_step(checklist_id, step)
-                        
-                        # Map phase to step group
-                        if 'phase_id' in step_group:
-                            self.id_mapper.add_mapping(step_group['phase_id'], created_step['id'], 'step_group')
+                for step in steps:
+                    step_captures = step.pop('field', [])
+                    created_step = self.tallyfy_client.create_step(checklist_id, step)
+                    
+                    ext_ref = step.get('external_ref')
+                    if ext_ref:
+                        self.id_mapper.add_mapping(ext_ref, created_step['id'], 'step')
+                    
+                    for capture in step_captures:
+                        self.tallyfy_client.create_capture('step', created_step['id'], capture)
                 
-                # Create field (transformed from fields)
-                for field in checklist_data.get('field', []):
-                    self.tallyfy_client.create_capture('multiselect', checklist_id, field)
+                # Create template-level captures
+                for capture in template_captures:
+                    self.tallyfy_client.create_capture('multiselect', checklist_id, capture)
                 
                 successful += 1
-                logger.debug(f"Created checklist: {checklist_data['multiselect'].get('title')}")
+                logger.debug(f"Created checklist: {checklist_data.get('title')}")
                 
             except Exception as e:
                 logger.error(f"Failed to migrate pipe {pipe.get('name', 'unknown')}: {e}")
