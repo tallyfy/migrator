@@ -521,6 +521,88 @@ class TestPipefyCardFields:
             orchestrator._migrate_card_fields(self.CARD, 'run_1')
 
 
+class TestPipefyPipePhaseShape:
+    """
+    The pipe phase must read the shape the transformer actually returns.
+
+    `transform_pipe_to_checklist` returns the checklist itself, with a FLAT
+    `steps` list and each step's phase under `config.phase_metadata`. The phase
+    used to read `checklist_data['multiselect']` and `['step_groups']`, neither
+    of which exists -- a KeyError that aborted every pipe before any card, and
+    so before any field value, could be migrated.
+    """
+
+    PIPE = {'id': 'pipe_1', 'name': 'Onboarding'}
+
+    CHECKLIST = {
+        'id': 'chk_1',
+        'title': 'Onboarding',
+        'steps': [
+            {'id': 'stp_1', 'title': 'Enter Intake',
+             'config': {'phase_metadata': {'phase_id': 'phase_1'}}},
+            {'id': 'stp_2', 'title': 'Complete Intake',
+             'config': {'phase_metadata': {'phase_id': 'phase_1'}}},
+        ],
+        'field': [{'id': 'cap_1', 'label': 'Company Name'}],
+    }
+
+    def build(self):
+        module = load_orchestrator('pipefy', 'ffv_pipefy_main')
+        orchestrator = make_orchestrator(module.PipefyMigrationOrchestrator)
+        orchestrator.pipefy_client = MagicMock()
+        orchestrator.pipefy_client.list_pipes.return_value = [self.PIPE]
+        orchestrator.pipefy_client.get_pipe.return_value = self.PIPE
+        orchestrator.phase_transformer = MagicMock()
+        orchestrator.phase_transformer.transform_pipe_to_checklist.return_value = (
+            dict(self.CHECKLIST)
+        )
+        orchestrator.tallyfy_client.create_checklist.return_value = {'id': 'chk_live'}
+        orchestrator.tallyfy_client.create_step.side_effect = (
+            lambda _cid, step: {'id': f"live_{step['id']}"}
+        )
+        orchestrator.progress = MagicMock()
+        orchestrator.progress.track.side_effect = lambda items, **_kw: items
+        orchestrator.config = {'migration': {'options': {'continue_on_error': False}}}
+        return orchestrator
+
+    def test_the_pipe_phase_completes(self):
+        orchestrator = self.build()
+        result = orchestrator._phase_pipes(dry_run=False)
+        assert result['successful'] == 1, f'pipe phase failed: {result}'
+
+    def test_the_checklist_itself_is_posted(self):
+        orchestrator = self.build()
+        orchestrator._phase_pipes(dry_run=False)
+        posted = orchestrator.tallyfy_client.create_checklist.call_args.args[0]
+        assert posted['title'] == 'Onboarding'
+
+    def test_every_step_in_the_flat_list_is_created(self):
+        orchestrator = self.build()
+        orchestrator._phase_pipes(dry_run=False)
+        assert orchestrator.tallyfy_client.create_step.call_count == 2
+
+    def test_phase_ids_are_read_from_step_config(self):
+        orchestrator = self.build()
+        orchestrator._phase_pipes(dry_run=False)
+        mapped = [
+            call.args for call in orchestrator.id_mapper.add_mapping.call_args_list
+            if call.args[2] == 'step_group'
+        ]
+        assert [m[0] for m in mapped] == ['phase_1', 'phase_1']
+
+    def test_a_malformed_start_form_list_is_skipped_not_fed_to_the_api(self):
+        # _transform_start_form_fields returns a dict when it misfires; iterating
+        # one would hand bare strings to create_capture.
+        orchestrator = self.build()
+        broken = dict(self.CHECKLIST)
+        broken['field'] = {'id': 'cap_1', 'label': 'Company Name'}
+        orchestrator.phase_transformer.transform_pipe_to_checklist.return_value = broken
+
+        result = orchestrator._phase_pipes(dry_run=False)
+        assert result['successful'] == 1
+        orchestrator.tallyfy_client.create_capture.assert_not_called()
+
+
 class TestProcessStreetFormValues:
     """`_migrate_form_values` PUT to a route that does not exist."""
 

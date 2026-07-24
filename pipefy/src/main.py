@@ -415,33 +415,67 @@ class PipefyMigrationOrchestrator:
                 # Transform pipe to checklist
                 checklist_data = self._transform_pipe_to_checklist(full_pipe)
                 
-                # Extract steps and captures for separate creation
+                # `transform_pipe_to_checklist` returns the checklist itself --
+                # there is no 'multiselect' wrapper key and no 'step_groups'.
+                # Steps are a FLAT list, each carrying its phase under
+                # config.phase_metadata and its own fields under 'field'.
                 steps = checklist_data.pop('steps', [])
                 template_captures = checklist_data.pop('field', [])
-                
+
                 # Create checklist in Tallyfy
                 created_checklist = self.tallyfy_client.create_checklist(checklist_data)
                 checklist_id = created_checklist['id']
-                
+
                 # Map pipe ID
                 self.id_mapper.add_mapping(pipe['id'], checklist_id, 'multiselect')
-                
+
                 # Create steps (transformed from phases)
                 for step in steps:
                     step_captures = step.pop('field', [])
                     created_step = self.tallyfy_client.create_step(checklist_id, step)
-                    
+
                     ext_ref = step.get('external_ref')
                     if ext_ref:
                         self.id_mapper.add_mapping(ext_ref, created_step['id'], 'step')
-                    
+
+                    # Map the source phase to the step it became. This mapping is
+                    # CONSUMED by _validate_phase_transformation (main.py) and by
+                    # utils/validator.py, both of which read get_all_mappings(
+                    # 'step_group') -- dropping it makes phase validation report
+                    # zero phases migrated.
+                    phase_id = (step.get('config', {})
+                                    .get('phase_metadata', {})
+                                    .get('phase_id'))
+                    if phase_id:
+                        self.id_mapper.add_mapping(phase_id, created_step['id'], 'step_group')
+
+                    # The phase's own fields become the step's captures. These are
+                    # what GET /runs/{run}/form-fields later returns, so card
+                    # values have nothing to resolve against without them.
                     for capture in step_captures:
                         self.tallyfy_client.create_capture('step', created_step['id'], capture)
-                
-                # Create template-level captures
+
+                # Create the template-level captures from the pipe's start form.
+                #
+                # NOTE: `_transform_start_form_fields` is broken upstream -- it
+                # shadows its accumulator with the loop variable and calls
+                # .append() on a dict, so it returns a dict (or []) rather than a
+                # list of fields, and every field is lost to a warning. Guard the
+                # shape here so a malformed value cannot silently feed bare
+                # strings to create_capture; repairing that transformer needs
+                # Pipefy start-form ground truth and is separate work.
+                if not isinstance(template_captures, list):
+                    logger.error(
+                        "Start-form fields for pipe %s came back as %s, not a list; "
+                        "skipping them. _transform_start_form_fields is returning a "
+                        "malformed value and every kick-off field is being dropped.",
+                        pipe['id'], type(template_captures).__name__,
+                    )
+                    template_captures = []
+
                 for capture in template_captures:
                     self.tallyfy_client.create_capture('multiselect', checklist_id, capture)
-                
+
                 successful += 1
                 logger.debug(f"Created checklist: {checklist_data.get('title')}")
                 
