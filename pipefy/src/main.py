@@ -449,11 +449,32 @@ class PipefyMigrationOrchestrator:
                     if phase_id:
                         self.id_mapper.add_mapping(phase_id, created_step['id'], 'step_group')
 
-                    # The phase's own fields become the step's captures. These are
-                    # what GET /runs/{run}/form-fields later returns, so card
-                    # values have nothing to resolve against without them.
-                    for capture in step_captures:
-                        self.tallyfy_client.create_capture('step', created_step['id'], capture)
+                    # The phase's own fields SHOULD become the step's captures --
+                    # they are what GET /runs/{run}/form-fields later returns, so
+                    # card values have nothing to resolve against without them.
+                    #
+                    # They are deliberately NOT created here, because
+                    # `create_capture` posts to `/{entity}s/{id}/field`, and no
+                    # such route exists: api-v2 serves capture creation only at
+                    # `runs/{run}/tasks/{task}/captures` and
+                    # `tasks/{task_id}/form-fields`. The payload shape is wrong
+                    # too (`type` rather than `field_type`, `select` rather than
+                    # `dropdown`, options nested under `config` as value/label
+                    # instead of top-level `options` with id/text).
+                    #
+                    # Adding calls here would only add calls to a dead route.
+                    # Repairing the capture-CREATION contract is a separate
+                    # workstream from the value-WRITE contract this change
+                    # fixes; see CLAUDE.md. Until it lands, value migration
+                    # correctly raises instead of silently discarding values.
+                    if step_captures:
+                        logger.warning(
+                            "Step %s has %d field(s) that cannot be created: "
+                            "capture creation posts to a route the API does not "
+                            "serve. Card values for these fields will fail to "
+                            "resolve rather than be silently dropped.",
+                            created_step['id'], len(step_captures),
+                        )
 
                 # Create the template-level captures from the pipe's start form.
                 #

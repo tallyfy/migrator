@@ -194,6 +194,30 @@ raises instead of being skipped.
 `shared/tests/test_form_field_values.py` pins the wire contract for every vendor client and
 drives the two live migration paths end to end.
 
+### ⚠️ Blocking gap: form fields are never CREATED, so there is nothing to write to
+
+The value-write contract above is correct and implemented, but it cannot complete
+end to end yet, because **no migrator can create a form field on a Tallyfy template**:
+
+- `create_capture()` posts to `/{entity_type}s/{entity_id}/field`. **No such route exists.**
+  api-v2 serves capture creation only at `runs/{run}/tasks/{task}/captures`
+  (`TaskCapturesController::store`) and `tasks/{task_id}/form-fields`
+  (`OneOffTasks\TaskFormFieldsController::store`) -- both on task INSTANCES, neither
+  on a template step.
+- The payload shape is wrong too. `FieldTransformer` emits `type` (the API wants
+  `field_type`), maps selects to `select` (the API wants `dropdown`), and nests
+  options under `config` as `value`/`label` (the API wants top-level `options`
+  with `id`/`text`).
+- This is the same family as the `add_kickoff_form()` gap above: the intended code
+  exists but was never reachable, so the failure has been invisible.
+
+Consequence: `GET /runs/{run}/form-fields` comes back empty, so
+`build_task_form_field_payloads` raises `UnresolvedFormFieldError` for every value.
+**That is the correct behaviour** -- the alternative is a 200 response with the data
+silently discarded. Fixing the capture-CREATION contract is the prerequisite for
+value migration to complete, and it is a separate workstream from the value-WRITE
+contract documented above.
+
 ### ⚠️ Value writes must fail LOUDLY
 
 The pipefy path wrapped every field in `except Exception: logger.warning(...)`. Combined
