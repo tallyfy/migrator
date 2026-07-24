@@ -655,3 +655,53 @@ class TestProcessStreetFormValues:
         )
         with pytest.raises(RuntimeError):
             orchestrator._migrate_form_values(self.RUN, 'run_1')
+
+    def test_a_stored_label_rescues_a_value_whose_mapped_id_does_not_match(self):
+        """
+        Pins the `field_label` fallback.
+
+        Process Street form values are keyed by an opaque PS field id. Nothing
+        on the target process is keyed that way, so without the label recorded
+        at template time (`_store_field_label`) every value would fail to
+        resolve and the whole run would raise. This is the only thing making PS
+        value migration work, and it arrived with no test of its own.
+        """
+        module = load_orchestrator('process-street', 'ffv_ps_main')
+        orchestrator = make_orchestrator(module.MigrationOrchestrator)
+
+        # The capture id recorded at template time is stale/unmatched; only the
+        # label matches a live field on the process.
+        stored = {
+            ('ps_notes', 'field'): 'stale_capture_id',
+            ('ps_notes', 'field_label'): 'Notes',
+        }
+        orchestrator.id_mapper.get_tallyfy_id.side_effect = (
+            lambda source_id, kind: stored.get((source_id, kind))
+        )
+
+        orchestrator._migrate_form_values(
+            {'id': 'r', 'formValues': {'ps_notes': 'Some notes'}}, 'run_1'
+        )
+
+        assert written_taskdata(orchestrator)[TASK_ONE][TL_NOTES] == 'Some notes'
+
+    def test_template_migration_records_the_label_for_each_capture(self):
+        """`_store_field_label` must record external_ref -> label under `field_label`."""
+        module = load_orchestrator('process-street', 'ffv_ps_main')
+        orchestrator = make_orchestrator(module.MigrationOrchestrator)
+
+        orchestrator._store_field_label(
+            {'id': 'cap_1', 'external_ref': 'ps_notes', 'label': 'Notes'}
+        )
+
+        orchestrator.id_mapper.add_mapping.assert_called_once_with(
+            'ps_notes', 'Notes', 'field_label'
+        )
+
+    def test_a_capture_without_a_source_ref_records_nothing(self):
+        module = load_orchestrator('process-street', 'ffv_ps_main')
+        orchestrator = make_orchestrator(module.MigrationOrchestrator)
+
+        orchestrator._store_field_label({'id': 'cap_1', 'label': 'Notes'})
+
+        orchestrator.id_mapper.add_mapping.assert_not_called()
