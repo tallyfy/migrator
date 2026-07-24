@@ -494,8 +494,14 @@ class PipefyMigrationOrchestrator:
                     )
                     template_captures = []
 
-                for capture in template_captures:
-                    self.tallyfy_client.create_capture('multiselect', checklist_id, capture)
+                if template_captures:
+                    logger.warning(
+                        "Pipe %s has %d start-form field(s) that cannot be "
+                        "created: capture creation posts to a route the API "
+                        "does not serve. Kick-off values for these fields "
+                        "will fail to resolve rather than be silently dropped.",
+                        pipe['id'], len(template_captures),
+                    )
 
                 successful += 1
                 logger.debug(f"Created checklist: {checklist_data.get('title')}")
