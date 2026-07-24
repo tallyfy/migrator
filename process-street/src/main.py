@@ -400,26 +400,37 @@ class MigrationOrchestrator:
                 # Extract steps for separate creation
                 steps = tallyfy_checklist.pop('steps', [])
                 template_captures = tallyfy_checklist.pop('field', [])
-                
+
+                # Kick-off fields ride a `prerun` array on the checklist create
+                # payload -- api-v2 serves no `preruns` store route, so they must
+                # be attached BEFORE the template is created.
+                if template_captures:
+                    tallyfy_checklist['prerun'] = self.tallyfy_client.build_prerun_fields(
+                        template_captures
+                    )
+                    for capture in template_captures:
+                        self._store_field_label(capture)
+
                 # Create checklist in Tallyfy
                 created_checklist = self.tallyfy_client.create_checklist(tallyfy_checklist)
                 checklist_id = created_checklist['id']
-                
+
                 # Create steps
                 for step in steps:
                     step_captures = step.pop('field', [])
                     created_step = self.tallyfy_client.create_step(checklist_id, step)
-                    
-                    # Create captures for step
-                    for capture in step_captures:
-                        self.tallyfy_client.create_capture('step', created_step['id'], capture)
+
+                    # Step fields live at
+                    # POST /checklists/{checklist_id}/steps/{step_id}/captures --
+                    # the route is nested under BOTH ids. A failure is fatal to
+                    # the workflow rather than a warning: a step whose fields are
+                    # missing silently loses every value written to it.
+                    for position, capture in enumerate(step_captures, start=1):
+                        self.tallyfy_client.create_step_capture(
+                            checklist_id, created_step['id'], capture, position=position,
+                        )
                         self._store_field_label(capture)
-                
-                # Create template-level captures
-                for capture in template_captures:
-                    self.tallyfy_client.create_capture('multiselect', checklist_id, capture)
-                    self._store_field_label(capture)
-                
+
                 successful += 1
                 logger.debug(f"Created template: {tallyfy_checklist.get('title', 'Untitled')}")
                 

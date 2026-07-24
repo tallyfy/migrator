@@ -3,6 +3,8 @@ Tallyfy API Client
 Handles all interactions with Tallyfy API for data import
 """
 
+import sys
+import os
 import requests
 import time
 import json
@@ -12,6 +14,15 @@ from typing import Dict, List, Optional, Any, Tuple
 from urllib.parse import urljoin
 from datetime import datetime, timedelta
 import backoff
+
+# The repo root holds the shared package. This module is imported both via
+# `main.py` (which bootstraps the path itself) and directly by tests, so it
+# cannot rely on a caller having done it.
+sys.path.insert(
+    0,
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+)
+from shared.capture_shapes import normalize_capture, normalize_captures
 
 logger = logging.getLogger(__name__)
 
@@ -463,35 +474,57 @@ class TallyfyClient:
         return self.update_step_instance(run_id, step_id, data)
     
     # Form/field Methods
-    def create_capture(self, entity_type: str, entity_id: str, capture_data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_step_capture(
+        self,
+        checklist_id: str,
+        step_id: str,
+        capture_data: Dict[str, Any],
+        position: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """
-        Create a capture (form field) for an entity
-        
-        Args:
-            entity_type: Type of entity (checklist, step, process)
-            entity_id: Entity ID
-            capture_data: Capture field configuration
-            
-        Returns:
-            Created capture object
+        Create a form field on a template step.
+
+        Endpoint: ``POST /organizations/{org}/checklists/{checklist_id}/steps/{step_id}/captures``
+
+        This route is registered in api-v2 as
+        ``Route::resource('captures', StepCapturesController::class)->only(['store', ...])``
+        nested under ``checklists/{checklist_id}/steps/{step_id}`` -- so it needs
+        BOTH ids. A bare ``/steps/{step_id}/captures`` is not served and 404s.
+
+        The body is normalised by :func:`shared.capture_shapes.normalize_capture`
+        into the shape ``CreateCaptureRequest`` validates.
         """
-        if 'id' not in capture_data:
-            capture_data['id'] = self._generate_hash_id('cap')
-        
-        # Validate field type
-        if 'field_type' in capture_data:
-            if capture_data['field_type'] not in self.FIELD_TYPES:
-                logger.warning(f"Invalid field type: {capture_data['field_type']}, defaulting to 'text'")
-                capture_data['field_type'] = 'text'
-        
-        endpoint = f'/api/organizations/{self.organization_id}/{entity_type}s/{entity_id}/captures'
-        result = self._make_request('POST', endpoint, json=capture_data)
-        
+        if not checklist_id:
+            raise ValueError('checklist_id is required to create a step form field')
+        if not step_id:
+            raise ValueError('step_id is required to create a step form field')
+
+        payload = normalize_capture(capture_data, position=position)
+
+        result = self._make_request(
+            'POST',
+            f'/checklists/{checklist_id}/steps/{step_id}/captures',
+            json=payload,
+        )
+
         self.stats['data_imported'].setdefault('captures', 0)
         self.stats['data_imported']['captures'] += 1
-        
+
         return result
-    
+
+    @staticmethod
+    def build_prerun_fields(captures: Any) -> List[Dict[str, Any]]:
+        """
+        Normalise kick-off fields for a checklist's ``prerun`` array.
+
+        api-v2 serves no ``preruns`` store route: kick-off fields are sent as a
+        ``prerun`` array on the checklist itself, accepted by
+        ``POST /organizations/{org}/checklists`` and
+        ``PUT /organizations/{org}/checklists/{id}``. Each entry obeys the same
+        capture rules as a step field.
+        """
+        return normalize_captures(captures)
+
     def get_run_form_fields(self, run_id: str) -> Dict[str, Any]:
         """
         Read every form field on a process, with the ids needed to write to it.

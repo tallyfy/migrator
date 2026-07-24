@@ -592,7 +592,7 @@ class TestPipefyPipePhaseShape:
 
     def test_a_malformed_start_form_list_is_skipped_not_fed_to_the_api(self):
         # _transform_start_form_fields returns a dict when it misfires; iterating
-        # one would hand bare strings to create_capture.
+        # one would migrate its KEYS as kick-off fields.
         orchestrator = self.build()
         broken = dict(self.CHECKLIST)
         broken['field'] = {'id': 'cap_1', 'label': 'Company Name'}
@@ -600,7 +600,47 @@ class TestPipefyPipePhaseShape:
 
         result = orchestrator._phase_pipes(dry_run=False)
         assert result['successful'] == 1
-        orchestrator.tallyfy_client.create_capture.assert_not_called()
+        orchestrator.tallyfy_client.build_prerun_fields.assert_not_called()
+        posted = orchestrator.tallyfy_client.create_checklist.call_args.args[0]
+        assert 'prerun' not in posted
+
+    def test_a_well_formed_start_form_becomes_the_checklist_prerun(self):
+        """
+        There is no route to add kick-off fields after creation, so they must
+        be on the create payload or they are lost outright.
+        """
+        orchestrator = self.build()
+        with_start_form = dict(self.CHECKLIST)
+        with_start_form['field'] = [{'label': 'Company Name', 'type': 'text'}]
+        orchestrator.phase_transformer.transform_pipe_to_checklist.return_value = with_start_form
+
+        result = orchestrator._phase_pipes(dry_run=False)
+        assert result['successful'] == 1
+
+        orchestrator.tallyfy_client.build_prerun_fields.assert_called_once_with(
+            [{'label': 'Company Name', 'type': 'text'}]
+        )
+        posted = orchestrator.tallyfy_client.create_checklist.call_args.args[0]
+        assert 'prerun' in posted, 'kick-off fields never reached the create payload'
+
+    def test_step_fields_are_created_against_both_ids(self):
+        orchestrator = self.build()
+        with_step_fields = dict(self.CHECKLIST)
+        with_step_fields['steps'] = [
+            dict(step, field=[{'label': 'Notes', 'type': 'textarea'}])
+            for step in self.CHECKLIST['steps']
+        ]
+        orchestrator.phase_transformer.transform_pipe_to_checklist.return_value = with_step_fields
+
+        orchestrator._phase_pipes(dry_run=False)
+
+        calls = orchestrator.tallyfy_client.create_step_capture.call_args_list
+        assert calls, 'step fields were never created; every step value is orphaned'
+        for call in calls:
+            checklist_id, step_id, capture = call.args[:3]
+            assert checklist_id, 'step captures need the checklist id'
+            assert step_id, 'step captures need the step id'
+            assert capture['label'] == 'Notes'
 
 
 class TestProcessStreetFormValues:

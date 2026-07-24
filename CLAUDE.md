@@ -194,29 +194,52 @@ raises instead of being skipped.
 `shared/tests/test_form_field_values.py` pins the wire contract for every vendor client and
 drives the two live migration paths end to end.
 
-### ⚠️ Blocking gap: form fields are never CREATED, so there is nothing to write to
+## Tallyfy API Contract: CREATING form fields on a template
 
-The value-write contract above is correct and implemented, but it cannot complete
-end to end yet, because **no migrator can create a form field on a Tallyfy template**:
+Creating a field is a different contract from writing its value. There are
+exactly two routes, and neither is a bare `/{entity}s/{id}/captures`.
 
-- `create_capture()` posts to `/{entity_type}s/{entity_id}/field`. **No such route exists.**
-  api-v2 serves capture creation only at `runs/{run}/tasks/{task}/captures`
-  (`TaskCapturesController::store`) and `tasks/{task_id}/form-fields`
-  (`OneOffTasks\TaskFormFieldsController::store`) -- both on task INSTANCES, neither
-  on a template step.
-- The payload shape is wrong too. `FieldTransformer` emits `type` (the API wants
-  `field_type`), maps selects to `select` (the API wants `dropdown`), and nests
-  options under `config` as `value`/`label` (the API wants top-level `options`
-  with `id`/`text`).
-- This is the same family as the `add_kickoff_form()` gap above: the intended code
-  exists but was never reachable, so the failure has been invisible.
+**Step fields** — `POST /organizations/{org}/checklists/{checklist_id}/steps/{step_id}/captures`
 
-Consequence: `GET /runs/{run}/form-fields` comes back empty, so
-`build_task_form_field_payloads` raises `UnresolvedFormFieldError` for every value.
-**That is the correct behaviour** -- the alternative is a 200 response with the data
-silently discarded. Fixing the capture-CREATION contract is the prerequisite for
-value migration to complete, and it is a separate workstream from the value-WRITE
-contract documented above.
+Registered in `api-v2/routes/api.php` as
+`Route::resource('captures', StepCapturesController::class)->only(['store', 'update', 'destroy'])`,
+nested under `checklists/{checklist_id}/steps/{step_id}`. **It needs BOTH ids.**
+
+> A grep for `post('captures'` does not match a `Route::resource(...)->only(['store'])`
+> line. An earlier audit in this repo made exactly that mistake and concluded no
+> template capture route existed. It does. Grep for `captures` and read the
+> enclosing `Route::prefix` before concluding a route is missing.
+
+**Kick-off fields** — there is **no** `preruns` store route. Kick-off fields ride a
+`prerun` **array on the checklist itself**, accepted by
+`POST /organizations/{org}/checklists` (`CreateChecklistRequest`) and
+`PUT /organizations/{org}/checklists/{id}` (`UpdateChecklistRequest`). Both call
+`addCapturesRules($rules, 'prerun')`, so each entry obeys the same rules as a step
+field. They must therefore be attached **before** the template is created — there is
+no route to add them afterwards.
+
+Both paths validate against `CreateCaptureRequest` / `CaptureRequestValidator`:
+
+| Key | Rule |
+|---|---|
+| `label` | **required** |
+| `field_type` | **required**, in `Capture::$field_types` |
+| `required` | **required**, boolean — must be PRESENT, not merely true |
+| `options` | required_if `field_type` in radio, dropdown, multiselect |
+| `options.*.id` | required, **integer** — a slug id is a 422 |
+| `options.*.text` | required, string |
+| `columns` | required_if `field_type` = table (`columns.*.id` integer, `columns.*.label` string) |
+| `position` | integer |
+
+`FieldTransformer` emits none of that — it emits `type`, `select`, and options nested
+under `config.options` as `{value, label}`. **`shared/capture_shapes.py` normalises it**
+(`normalize_capture` / `normalize_captures`); clients expose
+`create_step_capture(checklist_id, step_id, capture, position=)` and
+`build_prerun_fields(captures)`. Do not hand-roll the shape at a call site.
+
+A malformed field definition raises `TypeError` rather than being coerced: a bare
+string reaching the normaliser means an upstream transformer is broken, and quietly
+migrating it would recreate the class of bug this module exists to prevent.
 
 ### ⚠️ Value writes must fail LOUDLY
 

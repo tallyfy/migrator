@@ -422,6 +422,34 @@ class PipefyMigrationOrchestrator:
                 steps = checklist_data.pop('steps', [])
                 template_captures = checklist_data.pop('field', [])
 
+                # The pipe's start form becomes the template's kick-off fields.
+                # api-v2 serves no `preruns` store route: kick-off fields ride a
+                # `prerun` array on the checklist create payload itself
+                # (CreateChecklistRequest calls addCapturesRules($rules,
+                # 'prerun')), so they must be attached BEFORE the template is
+                # created.
+                #
+                # NOTE: `_transform_start_form_fields` is broken upstream -- it
+                # shadows its accumulator with the loop variable and calls
+                # .append() on a dict, so it returns a dict (or []) rather than a
+                # list of fields. Guard the shape here so a malformed value
+                # cannot feed bare strings into the normaliser; repairing that
+                # transformer needs Pipefy start-form ground truth and is
+                # separate work.
+                if not isinstance(template_captures, list):
+                    logger.error(
+                        "Start-form fields for pipe %s came back as %s, not a list; "
+                        "skipping them. _transform_start_form_fields is returning a "
+                        "malformed value and every kick-off field is being dropped.",
+                        pipe['id'], type(template_captures).__name__,
+                    )
+                    template_captures = []
+
+                if template_captures:
+                    checklist_data['prerun'] = self.tallyfy_client.build_prerun_fields(
+                        template_captures
+                    )
+
                 # Create checklist in Tallyfy
                 created_checklist = self.tallyfy_client.create_checklist(checklist_data)
                 checklist_id = created_checklist['id']
@@ -449,59 +477,20 @@ class PipefyMigrationOrchestrator:
                     if phase_id:
                         self.id_mapper.add_mapping(phase_id, created_step['id'], 'step_group')
 
-                    # The phase's own fields SHOULD become the step's captures --
-                    # they are what GET /runs/{run}/form-fields later returns, so
-                    # card values have nothing to resolve against without them.
+                    # The phase's own fields become the step's captures. They are
+                    # what GET /runs/{run}/form-fields later returns, so card
+                    # values have nothing to resolve against without them.
                     #
-                    # They are deliberately NOT created here, because
-                    # `create_capture` posts to `/{entity}s/{id}/field`, and no
-                    # such route exists: api-v2 serves capture creation only at
-                    # `runs/{run}/tasks/{task}/captures` and
-                    # `tasks/{task_id}/form-fields`. The payload shape is wrong
-                    # too (`type` rather than `field_type`, `select` rather than
-                    # `dropdown`, options nested under `config` as value/label
-                    # instead of top-level `options` with id/text).
-                    #
-                    # Adding calls here would only add calls to a dead route.
-                    # Repairing the capture-CREATION contract is a separate
-                    # workstream from the value-WRITE contract this change
-                    # fixes; see CLAUDE.md. Until it lands, value migration
-                    # correctly raises instead of silently discarding values.
-                    if step_captures:
-                        logger.warning(
-                            "Step %s has %d field(s) that cannot be created: "
-                            "capture creation posts to a route the API does not "
-                            "serve. Card values for these fields will fail to "
-                            "resolve rather than be silently dropped.",
-                            created_step['id'], len(step_captures),
+                    # The route is nested under BOTH ids --
+                    # POST /checklists/{checklist_id}/steps/{step_id}/captures --
+                    # and the body is normalised into the shape
+                    # CreateCaptureRequest validates. A failure here is fatal to
+                    # the pipe rather than a warning: a step whose fields are
+                    # missing silently loses every card value written to it.
+                    for position, capture in enumerate(step_captures, start=1):
+                        self.tallyfy_client.create_step_capture(
+                            checklist_id, created_step['id'], capture, position=position,
                         )
-
-                # Create the template-level captures from the pipe's start form.
-                #
-                # NOTE: `_transform_start_form_fields` is broken upstream -- it
-                # shadows its accumulator with the loop variable and calls
-                # .append() on a dict, so it returns a dict (or []) rather than a
-                # list of fields, and every field is lost to a warning. Guard the
-                # shape here so a malformed value cannot silently feed bare
-                # strings to create_capture; repairing that transformer needs
-                # Pipefy start-form ground truth and is separate work.
-                if not isinstance(template_captures, list):
-                    logger.error(
-                        "Start-form fields for pipe %s came back as %s, not a list; "
-                        "skipping them. _transform_start_form_fields is returning a "
-                        "malformed value and every kick-off field is being dropped.",
-                        pipe['id'], type(template_captures).__name__,
-                    )
-                    template_captures = []
-
-                if template_captures:
-                    logger.warning(
-                        "Pipe %s has %d start-form field(s) that cannot be "
-                        "created: capture creation posts to a route the API "
-                        "does not serve. Kick-off values for these fields "
-                        "will fail to resolve rather than be silently dropped.",
-                        pipe['id'], len(template_captures),
-                    )
 
                 successful += 1
                 logger.debug(f"Created checklist: {checklist_data.get('title')}")
