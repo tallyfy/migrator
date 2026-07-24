@@ -344,10 +344,46 @@ class TallyfyClient:
             response.raise_for_status()
             return response.json()
 
-    def set_field_value(self, run_id: str, field_id: str, value: Any) -> Dict[str, Any]:
-        """Set a form field value in a run"""
-        data = {'value': value}
-        return self._make_request('PUT', f'/runs/{run_id}/fields/{field_id}/value', json=data)
+    def set_form_field_value(self, form_field_value_id: str, value: Any) -> Dict[str, Any]:
+        """
+        Set ONE form-field value on an existing process.
+
+        Endpoint: ``PUT /organizations/{org}/form-field/value``
+        Body:     ``{"id": <capture-value id>, "form_value": <typed value>}``
+
+        Args:
+            form_field_value_id: The id of the CAPTURE VALUE row, which is what
+                the API resolves (``CaptureValue::find($data['id'])``). It is
+                NOT a capture/field definition id and NOT a ``timeline_id``;
+                sending either of those returns an error, not a silent no-op.
+            value: The value, already encoded for the field's type. Use
+                ``shared.prerun_encoder.encode_field_value`` -- a stringified
+                value breaks dropdown, multi-select, table and assignee fields,
+                and a multi-select entry without ``"selected": true`` stores but
+                renders empty wherever the field is used as a ``{{variable}}``.
+
+        Returns:
+            The API response.
+
+        Note:
+            Capture-value ids are not discoverable through the API, so a
+            migration cannot normally reach this endpoint. To write values onto
+            a migrated process, read the fields from
+            ``GET /runs/{run_id}/form-fields`` and write them per task with
+            ``update_task_form_field_values`` -- that path keys by
+            ``timeline_id``, which the response does expose.
+        """
+        if not form_field_value_id:
+            raise ValueError(
+                'form_field_value_id is required: the API resolves the capture '
+                'value by id and cannot infer it.'
+            )
+
+        return self._make_request(
+            'PUT',
+            '/form-field/value',
+            json={'id': form_field_value_id, 'form_value': value},
+        )
 
     # Groups
     def create_group(self, name: str, member_ids: List[str] = None) -> Dict[str, Any]:

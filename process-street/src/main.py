@@ -31,6 +31,14 @@ from utils.validator import MigrationValidator
 from utils.logger_config import setup_logging
 from dotenv import load_dotenv
 
+# The repo root holds the shared package; the sys.path line above only adds the
+# process-street vendor root, so `import shared` would fail without this.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from shared.form_field_values import (
+    build_task_form_field_payloads,
+    extract_run_form_fields,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -601,14 +609,60 @@ class MigrationOrchestrator:
                     self.tallyfy_client.complete_step(run_id, step_id, completed_by)
     
     def _migrate_form_values(self, ps_run: Dict, run_id: str):
-        """Migrate form field values"""
-        form_values = ps_run.get('formValues', {})
-        
+        """
+        Write a run's form values onto the process that was created from it.
+
+        Values are keyed by the target field's ``timeline_id`` and encoded for
+        the field's type by the shared encoder, then written per task through
+        the bulk ``taskdata`` writer. Both are load-bearing: the API ignores any
+        key that is not a ``timeline_id``, and a stringified value breaks
+        dropdown, multi-select, table and assignee fields -- in every case the
+        write still succeeds, so the loss is invisible without this care.
+
+        Raises on any value that cannot be placed, rather than skipping it: a
+        run whose form values silently vanish is worse than one that fails
+        loudly and can be retried. The caller counts the failure and honours
+        ``continue_on_error``.
+        """
+        form_values = ps_run.get('formValues', {}) or {}
+        if not form_values:
+            return
+
+        raw_values = {}
+        hints = {}
         for field_id, value in form_values.items():
-            capture_id = self.id_mapper.get_tallyfy_id(field_id, "field")
-            if capture_id:
-                self.tallyfy_client.set_capture_value(run_id, capture_id, value)
-    
+            if value in (None, ''):
+                continue
+            # Prefer the capture id this field was mapped to at template time,
+            # and keep the Process Street field id as a fallback so a value
+            # still resolves when that mapping is missing.
+            key = self.id_mapper.get_tallyfy_id(field_id, "field") or field_id
+            raw_values[key] = value
+            if str(key) != str(field_id):
+                hints[key] = [field_id]
+
+        if not raw_values:
+            return
+
+        form_fields = extract_run_form_fields(
+            self.tallyfy_client.get_run_form_fields(run_id)
+        )
+
+        payloads = build_task_form_field_payloads(
+            raw_values, form_fields, strict=True, fallback_keys=hints
+        )
+
+        for task_id, taskdata in payloads.items():
+            self.tallyfy_client.update_task_form_field_values(
+                run_id, task_id, taskdata
+            )
+
+        logger.debug(
+            "Migrated %d form value(s) across %d task(s) for process %s",
+            len(raw_values), len(payloads), run_id,
+        )
+
+
     def _estimate_migration_time(self, counts: Dict[str, int]) -> str:
         """Estimate total migration time based on object counts"""
         # Rough estimates per object type (seconds)

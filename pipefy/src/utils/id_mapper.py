@@ -6,7 +6,7 @@ Maintains mappings between Pipefy and Tallyfy object IDs
 import sqlite3
 import json
 import logging
-from typing import Dict, Optional, List, Tuple
+from typing import Any, Dict, Optional, List, Tuple
 from datetime import datetime
 from pathlib import Path
 

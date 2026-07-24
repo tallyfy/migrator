@@ -4,7 +4,7 @@ Universal Data Validation System using Pydantic
 Ensures data integrity throughout migration pipeline
 """
 
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional, Tuple, Union
 from datetime import datetime
 from pydantic import BaseModel, Field, validator, root_validator, EmailStr, HttpUrl
 from enum import Enum

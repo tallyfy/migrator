@@ -1,0 +1,575 @@
+"""
+Contract + wiring tests for writing form-field values onto migrated processes.
+
+WHY THIS FILE EXISTS
+--------------------
+Three independent failures all produced the same symptom -- a migration that
+prints a success summary while every field value is gone:
+
+1. ``pipefy`` called ``transform_field_value(field)`` with one argument against
+   a two-argument signature, so EVERY field raised ``TypeError``, which a
+   blanket ``except Exception`` downgraded to ``logger.warning``.
+2. Both live callers PUT to endpoints that do not exist
+   (``/runs/{run}/field/{capture}/value``, ``/runs/{run}/captures/{capture}/value``),
+   wrapping the value in ``{"value": ...}`` -- a body shape the API never reads.
+3. Neither routed values through the shared typed encoder, so choice, table and
+   assignee fields would have been flattened to strings even had the call
+   landed.
+
+So these tests assert the properties that actually matter at runtime: the wire
+contract of every vendor client, and that the two live migration paths encode
+per type, key by ``timeline_id``, and fail LOUDLY rather than dropping a value.
+"""
+
+import importlib.util
+import os
+import sys
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+from shared.form_field_values import (  # noqa: E402
+    MissingTaskBindingError,
+    UnresolvedFormFieldError,
+    build_task_form_field_payloads,
+    extract_run_form_fields,
+)
+
+# 32-char hex timeline_ids -- the only keys the API reads for form-field writes.
+TL_NOTES = 'a1b2c3d4e5f60718293a4b5c6d7e8f90'
+TL_PLAN = 'ffeeddccbbaa99887766554433221100'
+TL_TAGS = '00112233445566778899aabbccddeeff'
+TL_PRIORITY = '0f1e2d3c4b5a69788796a5b4c3d2e1f0'
+
+TASK_ONE = 'task_1111'
+TASK_TWO = 'task_2222'
+
+# Every vendor client that exposes a single-value form-field writer.
+ALL_CLIENT_VENDORS = [
+    'basecamp', 'bpmn', 'clickup', 'cognito-forms', 'google-forms', 'jotform',
+    'nextmatter', 'pipefy', 'process-street', 'rocketlane', 'surveymonkey',
+    'trello', 'typeform', 'wrike',
+]
+
+# Clients built as TallyfyClient(api_url, client_id, client_secret, org, slug)
+# and authenticating in __init__.
+OAUTH_CLIENT_VENDORS = ['bpmn', 'pipefy', 'process-street']
+
+# The two vendors whose migration path actually writes form-field values.
+LIVE_WRITER_VENDORS = ['pipefy', 'process-street']
+
+
+def load_client(vendor):
+    """Import a vendor's tallyfy_client module under a unique name."""
+    path = os.path.join(REPO_ROOT, vendor, 'src', 'api', 'tallyfy_client.py')
+    module_name = f'ffv_tallyfy_client_{vendor.replace("-", "_")}'
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module.TallyfyClient
+
+
+def build_client(vendor):
+    """Instantiate a vendor client without touching the network."""
+    client_cls = load_client(vendor)
+    if vendor in OAUTH_CLIENT_VENDORS:
+        with patch.object(client_cls, '_authenticate', return_value=None):
+            return client_cls, client_cls(
+                'https://api.example.com', 'id', 'secret', 'org', 'slug'
+            )
+    return client_cls, client_cls(api_key='test-key', organization='test-org')
+
+
+def run_form_fields_response():
+    """A runs/{id}/form-fields response, shaped exactly as the API returns it."""
+    return {'data': {
+        'id': 'run_1',
+        'form_fields': [
+            {'id': TL_NOTES, 'alias': 'notes', 'label': 'Notes',
+             'field_type': 'textarea', 'task_id': TASK_ONE},
+            {'id': TL_PLAN, 'alias': 'preferred_plan', 'label': 'Preferred Plan',
+             'field_type': 'dropdown', 'task_id': TASK_ONE,
+             'options': [{'id': 1, 'text': 'Pro'}, {'id': 2, 'text': 'Enterprise'}]},
+            {'id': TL_TAGS, 'alias': 'tags', 'label': 'Tags',
+             'field_type': 'multiselect', 'task_id': TASK_TWO,
+             'options': [{'id': 1, 'text': 'Urgent'}, {'id': 2, 'text': 'Billing'}]},
+            {'id': TL_PRIORITY, 'alias': 'priority', 'label': 'Priority',
+             'field_type': 'radio', 'task_id': TASK_TWO,
+             'options': [{'id': 1, 'text': 'High'}, {'id': 2, 'text': 'Low'}]},
+        ],
+        'ko_form_fields': [],
+    }}
+
+
+# ---------------------------------------------------------------------------
+# Wire contract: every vendor client
+# ---------------------------------------------------------------------------
+
+class TestSingleValueWireContract:
+    """PUT /organizations/{org}/form-field/value with {"id", "form_value"}."""
+
+    @pytest.mark.parametrize('vendor', ALL_CLIENT_VENDORS)
+    def test_uses_the_real_endpoint_and_body(self, vendor):
+        client_cls, client = build_client(vendor)
+
+        with patch.object(client_cls, '_make_request', return_value={}) as request:
+            client.set_form_field_value('cv_123', 'Hello')
+
+        method, endpoint = request.call_args.args[:2]
+        assert method == 'PUT'
+        assert endpoint == '/form-field/value', (
+            f'{vendor} PUT to {endpoint!r}, which is not a route the API serves'
+        )
+        assert request.call_args.kwargs['json'] == {
+            'id': 'cv_123', 'form_value': 'Hello',
+        }
+
+    @pytest.mark.parametrize('vendor', ALL_CLIENT_VENDORS)
+    def test_does_not_wrap_the_value(self, vendor):
+        """`{"value": ...}` is a shape the API never reads."""
+        client_cls, client = build_client(vendor)
+
+        with patch.object(client_cls, '_make_request', return_value={}) as request:
+            client.set_form_field_value('cv_123', 'Hello')
+
+        body = request.call_args.kwargs['json']
+        assert 'value' not in body, f'{vendor} still wraps the value in `value`'
+        assert 'form_value' in body
+
+    @pytest.mark.parametrize('vendor', ALL_CLIENT_VENDORS)
+    def test_dead_endpoints_and_their_methods_are_gone(self, vendor):
+        """The routes that never existed, and the methods that targeted them."""
+        path = os.path.join(REPO_ROOT, vendor, 'src', 'api', 'tallyfy_client.py')
+        with open(path) as handle:
+            source = handle.read()
+
+        for dead in ('/fields/{field_id}/value',
+                     '/captures/{capture_id}/value',
+                     '/field/{capture_id}/value'):
+            assert dead not in source, f'{vendor} still targets the dead route {dead}'
+
+        # Asserted on the CLASS, not on a mock: `hasattr` on a MagicMock is
+        # always True, so a mock-based version of this check proves nothing.
+        client_cls = load_client(vendor)
+        for gone in ('set_capture_value', 'set_field_value'):
+            assert not hasattr(client_cls, gone), (
+                f'{vendor} still exposes {gone}(), which PUT to a route the API '
+                'does not serve and wrapped the value in `value`'
+            )
+
+    @pytest.mark.parametrize('vendor', ALL_CLIENT_VENDORS)
+    def test_a_missing_id_is_rejected_not_sent(self, vendor):
+        """The API resolves the capture value by id; it cannot infer it."""
+        client_cls, client = build_client(vendor)
+
+        with patch.object(client_cls, '_make_request') as request:
+            with pytest.raises(ValueError):
+                client.set_form_field_value('', 'Hello')
+        request.assert_not_called()
+
+    @pytest.mark.parametrize('vendor', ALL_CLIENT_VENDORS)
+    def test_typed_values_pass_through_unflattened(self, vendor):
+        """A dropdown must arrive as {id, text}, not as a string."""
+        client_cls, client = build_client(vendor)
+
+        with patch.object(client_cls, '_make_request', return_value={}) as request:
+            client.set_form_field_value('cv_1', {'id': 2, 'text': 'Enterprise'})
+
+        assert request.call_args.kwargs['json']['form_value'] == {
+            'id': 2, 'text': 'Enterprise',
+        }
+
+
+class TestBulkWriterWireContract:
+    """PUT /organizations/{org}/runs/{run}/tasks/{task} with {"taskdata": {...}}."""
+
+    @pytest.mark.parametrize('vendor', LIVE_WRITER_VENDORS)
+    def test_reads_form_fields_from_the_run(self, vendor):
+        client_cls, client = build_client(vendor)
+
+        with patch.object(client_cls, '_make_request', return_value={}) as request:
+            client.get_run_form_fields('run_1')
+
+        assert request.call_args.args == ('GET', '/runs/run_1/form-fields')
+
+    @pytest.mark.parametrize('vendor', LIVE_WRITER_VENDORS)
+    def test_writes_taskdata_keyed_by_timeline_id(self, vendor):
+        client_cls, client = build_client(vendor)
+
+        with patch.object(client_cls, '_make_request', return_value={}) as request:
+            client.update_task_form_field_values(
+                'run_1', TASK_ONE, {TL_NOTES: 'Some notes'}
+            )
+
+        assert request.call_args.args == ('PUT', f'/runs/run_1/tasks/{TASK_ONE}')
+        assert request.call_args.kwargs['json'] == {
+            'taskdata': {TL_NOTES: 'Some notes'},
+        }
+
+    @pytest.mark.parametrize('vendor', LIVE_WRITER_VENDORS)
+    def test_an_empty_write_is_rejected(self, vendor):
+        client_cls, client = build_client(vendor)
+
+        with patch.object(client_cls, '_make_request') as request:
+            with pytest.raises(ValueError):
+                client.update_task_form_field_values('run_1', TASK_ONE, {})
+        request.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# The shared resolver / grouper
+# ---------------------------------------------------------------------------
+
+class TestExtractRunFormFields:
+
+    def test_merges_step_fields_and_kickoff_fields(self):
+        response = {'data': {
+            'form_fields': [{'id': TL_NOTES}],
+            'ko_form_fields': [{'id': TL_PLAN}],
+        }}
+        assert [f['id'] for f in extract_run_form_fields(response)] == [TL_NOTES, TL_PLAN]
+
+    def test_accepts_a_bare_list(self):
+        assert extract_run_form_fields([{'id': TL_NOTES}]) == [{'id': TL_NOTES}]
+
+    def test_an_empty_response_yields_no_fields(self):
+        assert extract_run_form_fields(None) == []
+        assert extract_run_form_fields({}) == []
+
+
+class TestBuildTaskFormFieldPayloads:
+
+    FIELDS = extract_run_form_fields(run_form_fields_response())
+
+    def test_groups_values_by_task(self):
+        payloads = build_task_form_field_payloads(
+            {'notes': 'Hello', 'tags': ['Urgent']}, self.FIELDS
+        )
+        assert set(payloads) == {TASK_ONE, TASK_TWO}
+        assert set(payloads[TASK_ONE]) == {TL_NOTES}
+        assert set(payloads[TASK_TWO]) == {TL_TAGS}
+
+    def test_keys_are_timeline_ids_never_source_keys(self):
+        payloads = build_task_form_field_payloads({'notes': 'Hello'}, self.FIELDS)
+        assert list(payloads[TASK_ONE]) == [TL_NOTES]
+        assert 'notes' not in payloads[TASK_ONE]
+
+    def test_dropdown_keeps_both_id_and_text(self):
+        payloads = build_task_form_field_payloads(
+            {'preferred_plan': 'Enterprise'}, self.FIELDS
+        )
+        assert payloads[TASK_ONE][TL_PLAN] == {'id': 2, 'text': 'Enterprise'}
+
+    def test_radio_is_bare_text_not_an_object(self):
+        """dropdown and radio are deliberately asymmetric."""
+        payloads = build_task_form_field_payloads({'priority': 'High'}, self.FIELDS)
+        assert payloads[TASK_TWO][TL_PRIORITY] == 'High'
+
+    def test_multiselect_entries_carry_selected_true(self):
+        # Without `selected: true` the value stores but renders EMPTY wherever
+        # the field is used as a {{variable}}.
+        payloads = build_task_form_field_payloads(
+            {'tags': ['Urgent', 'Billing']}, self.FIELDS
+        )
+        assert payloads[TASK_TWO][TL_TAGS] == [
+            {'id': 1, 'text': 'Urgent', 'selected': True},
+            {'id': 2, 'text': 'Billing', 'selected': True},
+        ]
+
+    def test_resolves_by_timeline_id_alias_and_label(self):
+        for key in (TL_NOTES, 'notes', 'Notes'):
+            payloads = build_task_form_field_payloads({key: 'Hello'}, self.FIELDS)
+            assert payloads[TASK_ONE][TL_NOTES] == 'Hello', key
+
+    def test_fallback_keys_rescue_an_unmapped_source_id(self):
+        payloads = build_task_form_field_payloads(
+            {'pipefy_field_77': 'Hello'}, self.FIELDS,
+            fallback_keys={'pipefy_field_77': ['Notes']},
+        )
+        assert payloads[TASK_ONE][TL_NOTES] == 'Hello'
+
+    def test_an_unresolved_value_raises_by_default(self):
+        # The write would still return 200 with the value discarded, so a quiet
+        # skip here is silent data loss.
+        with pytest.raises(UnresolvedFormFieldError) as excinfo:
+            build_task_form_field_payloads({'nope': 'Hello'}, self.FIELDS)
+        assert 'nope' in excinfo.value.unresolved
+
+    def test_a_process_with_no_fields_raises(self):
+        with pytest.raises(UnresolvedFormFieldError):
+            build_task_form_field_payloads({'notes': 'Hello'}, [])
+
+    def test_non_strict_mode_skips_instead_of_raising(self):
+        payloads = build_task_form_field_payloads(
+            {'notes': 'Hello', 'nope': 'x'}, self.FIELDS, strict=False
+        )
+        assert payloads[TASK_ONE][TL_NOTES] == 'Hello'
+        assert all('nope' not in v for v in payloads.values())
+
+    def test_a_field_without_a_task_raises(self):
+        """taskdata is written per task, so a field with no task has nowhere to go."""
+        fields = [{'id': TL_NOTES, 'alias': 'notes', 'field_type': 'text'}]
+        with pytest.raises(MissingTaskBindingError):
+            build_task_form_field_payloads({'notes': 'Hello'}, fields)
+
+    def test_no_values_is_a_no_op(self):
+        assert build_task_form_field_payloads({}, self.FIELDS) == {}
+
+
+# ---------------------------------------------------------------------------
+# Live migration paths -- the orchestrators themselves
+# ---------------------------------------------------------------------------
+
+# Third-party packages the orchestrators import transitively but that the code
+# path under test never touches: console colouring and the optional external
+# database migrator (only used when DATABASE_URL is set). The list is explicit
+# so a stub can never mask a missing import in the code actually under test.
+OPTIONAL_IMPORTS = (
+    'colorlog',
+    'sqlalchemy', 'sqlalchemy.exc',
+    'psycopg2', 'psycopg2.extras',
+)
+
+
+def _stub_optional_dependencies():
+    """
+    Provide no-op stand-ins for absent optional third-party packages.
+
+    These tests must RUN, not skip. A skipped test is how an unreachable code
+    path stays green for months -- exactly the failure mode this file exists to
+    catch. Each stub is installed only when the real package is genuinely
+    absent, and only for the names listed in ``OPTIONAL_IMPORTS``.
+    """
+    import logging
+    import types
+    from unittest.mock import MagicMock
+
+    for name in OPTIONAL_IMPORTS:
+        if name in sys.modules:
+            continue
+        try:
+            __import__(name)
+            continue
+        except ImportError:
+            pass
+
+        stub = types.ModuleType(name)
+        if name == 'colorlog':
+            stub.ColoredFormatter = logging.Formatter
+            stub.StreamHandler = logging.StreamHandler
+            stub.getLogger = logging.getLogger
+        else:
+            # Attribute access on an unused module must not explode at import.
+            stub.__getattr__ = lambda attr: MagicMock()
+        sys.modules[name] = stub
+
+    # `from pkg.sub import Name` also needs the submodule bound on its parent.
+    for name in OPTIONAL_IMPORTS:
+        if '.' not in name:
+            continue
+        parent_name, _, child = name.rpartition('.')
+        parent = sys.modules.get(parent_name)
+        if parent is not None and not hasattr(parent, child):
+            setattr(parent, child, sys.modules[name])
+
+
+def load_orchestrator(vendor, module_name):
+    """
+    Import a vendor's main.py with its own src dir on sys.path.
+
+    The orchestrators are imported, never constructed: their __init__ reads
+    config files, dotenv and a checkpoint directory, none of which this test
+    needs. Instances are made with __new__ and given mock collaborators, so the
+    REAL method under test runs against a fake client.
+    """
+    _stub_optional_dependencies()
+    src = os.path.join(REPO_ROOT, vendor, 'src')
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    path = os.path.join(src, 'main.py')
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def make_orchestrator(orchestrator_cls, mapped_ids=None):
+    """Build an orchestrator with a mock Tallyfy client and id mapper."""
+    orchestrator = object.__new__(orchestrator_cls)
+    orchestrator.tallyfy_client = MagicMock()
+    orchestrator.tallyfy_client.get_run_form_fields.return_value = (
+        run_form_fields_response()
+    )
+    orchestrator.id_mapper = MagicMock()
+    lookup = mapped_ids or {}
+    orchestrator.id_mapper.get_tallyfy_id.side_effect = (
+        lambda source_id, kind: lookup.get(source_id)
+    )
+    return orchestrator
+
+
+def written_taskdata(orchestrator):
+    """Collapse every taskdata write into one {task_id: {timeline_id: value}}."""
+    writes = {}
+    for call in orchestrator.tallyfy_client.update_task_form_field_values.call_args_list:
+        _run_id, task_id, taskdata = call.args
+        writes.setdefault(task_id, {}).update(taskdata)
+    return writes
+
+
+class TestPipefyCardFields:
+    """`_migrate_card_fields` used to raise TypeError on EVERY field."""
+
+    CARD = {'id': 'card_1', 'fields': [
+        {'field': {'id': 'pf_notes', 'label': 'Notes', 'type': 'long_text'},
+         'value': 'Some notes'},
+        {'field': {'id': 'pf_plan', 'label': 'Preferred Plan', 'type': 'select'},
+         'value': 'Enterprise'},
+        {'field': {'id': 'pf_tags', 'label': 'Tags', 'type': 'checklist_horizontal'},
+         'value': None, 'array_value': ['Urgent', 'Billing']},
+    ]}
+
+    MAPPED = {'pf_notes': TL_NOTES, 'pf_plan': TL_PLAN, 'pf_tags': TL_TAGS}
+
+    def build(self, mapped_ids=None):
+        module = load_orchestrator('pipefy', 'ffv_pipefy_main')
+        return make_orchestrator(
+            module.PipefyMigrationOrchestrator,
+            self.MAPPED if mapped_ids is None else mapped_ids,
+        )
+
+    def test_every_field_value_reaches_the_api(self):
+        # The regression: a one-argument call against a two-argument signature
+        # raised TypeError per field, swallowed into a warning, so NOTHING was
+        # ever written while the migration reported success.
+        orchestrator = self.build()
+        orchestrator._migrate_card_fields(self.CARD, 'run_1')
+
+        writes = written_taskdata(orchestrator)
+        assert writes[TASK_ONE][TL_NOTES] == 'Some notes'
+        assert writes[TASK_ONE][TL_PLAN] == {'id': 2, 'text': 'Enterprise'}
+        assert writes[TASK_TWO][TL_TAGS] == [
+            {'id': 1, 'text': 'Urgent', 'selected': True},
+            {'id': 2, 'text': 'Billing', 'selected': True},
+        ]
+
+    def test_the_dead_single_value_writer_is_not_used(self):
+        # `hasattr`/`.called` on a MagicMock proves nothing, so assert on the
+        # calls that were actually recorded: the only writes must be taskdata.
+        orchestrator = self.build()
+        orchestrator._migrate_card_fields(self.CARD, 'run_1')
+
+        called = {
+            name.split('.')[0]
+            for name, _args, _kwargs in orchestrator.tallyfy_client.mock_calls
+        }
+        assert called == {'get_run_form_fields', 'update_task_form_field_values'}, (
+            f'unexpected client calls: {sorted(called)}'
+        )
+
+    def test_array_value_wins_so_multiselects_keep_their_shape(self):
+        orchestrator = self.build()
+        orchestrator._migrate_card_fields(self.CARD, 'run_1')
+        assert isinstance(written_taskdata(orchestrator)[TASK_TWO][TL_TAGS], list)
+
+    def test_an_unmapped_field_still_resolves_by_label(self):
+        orchestrator = self.build(mapped_ids={})
+        orchestrator._migrate_card_fields(self.CARD, 'run_1')
+        assert written_taskdata(orchestrator)[TASK_ONE][TL_NOTES] == 'Some notes'
+
+    def test_a_field_missing_from_the_template_fails_loudly(self):
+        orchestrator = self.build()
+        card = {'id': 'card_2', 'fields': [
+            {'field': {'id': 'pf_ghost', 'label': 'Not On The Template',
+                       'type': 'short_text'}, 'value': 'x'},
+        ]}
+        with pytest.raises(UnresolvedFormFieldError):
+            orchestrator._migrate_card_fields(card, 'run_1')
+
+    def test_nothing_is_written_when_a_value_cannot_be_placed(self):
+        """A partial write would leave the process half-migrated and look fine."""
+        orchestrator = self.build()
+        card = {'id': 'card_3', 'fields': [
+            {'field': {'id': 'pf_notes', 'label': 'Notes', 'type': 'long_text'},
+             'value': 'Some notes'},
+            {'field': {'id': 'pf_ghost', 'label': 'Ghost', 'type': 'short_text'},
+             'value': 'x'},
+        ]}
+        with pytest.raises(UnresolvedFormFieldError):
+            orchestrator._migrate_card_fields(card, 'run_1')
+        orchestrator.tallyfy_client.update_task_form_field_values.assert_not_called()
+
+    def test_a_card_with_no_fields_makes_no_api_calls(self):
+        orchestrator = self.build()
+        orchestrator._migrate_card_fields({'id': 'card_4', 'fields': []}, 'run_1')
+        orchestrator.tallyfy_client.get_run_form_fields.assert_not_called()
+
+    def test_an_api_failure_is_not_swallowed(self):
+        # The blanket `except Exception -> logger.warning` made every hard
+        # failure invisible.
+        orchestrator = self.build()
+        orchestrator.tallyfy_client.update_task_form_field_values.side_effect = (
+            RuntimeError('500 from the API')
+        )
+        with pytest.raises(RuntimeError):
+            orchestrator._migrate_card_fields(self.CARD, 'run_1')
+
+
+class TestProcessStreetFormValues:
+    """`_migrate_form_values` PUT to a route that does not exist."""
+
+    RUN = {'id': 'ps_run_1', 'formValues': {
+        'ps_notes': 'Some notes',
+        'ps_plan': 'Enterprise',
+        'ps_priority': 'High',
+    }}
+
+    MAPPED = {'ps_notes': TL_NOTES, 'ps_plan': TL_PLAN, 'ps_priority': TL_PRIORITY}
+
+    def build(self, mapped_ids=None):
+        module = load_orchestrator('process-street', 'ffv_ps_main')
+        return make_orchestrator(
+            module.MigrationOrchestrator,
+            self.MAPPED if mapped_ids is None else mapped_ids,
+        )
+
+    def test_values_are_encoded_per_type_and_keyed_by_timeline_id(self):
+        orchestrator = self.build()
+        orchestrator._migrate_form_values(self.RUN, 'run_1')
+
+        writes = written_taskdata(orchestrator)
+        assert writes[TASK_ONE][TL_NOTES] == 'Some notes'
+        assert writes[TASK_ONE][TL_PLAN] == {'id': 2, 'text': 'Enterprise'}
+        # radio takes the option TEXT as a bare scalar, unlike dropdown.
+        assert writes[TASK_TWO][TL_PRIORITY] == 'High'
+
+    def test_writes_are_grouped_one_call_per_task(self):
+        orchestrator = self.build()
+        orchestrator._migrate_form_values(self.RUN, 'run_1')
+        assert orchestrator.tallyfy_client.update_task_form_field_values.call_count == 2
+
+    def test_a_value_with_no_matching_field_fails_loudly(self):
+        orchestrator = self.build(mapped_ids={})
+        with pytest.raises(UnresolvedFormFieldError):
+            orchestrator._migrate_form_values(
+                {'id': 'r', 'formValues': {'ps_ghost': 'x'}}, 'run_1'
+            )
+
+    def test_a_run_with_no_form_values_makes_no_api_calls(self):
+        orchestrator = self.build()
+        orchestrator._migrate_form_values({'id': 'r', 'formValues': {}}, 'run_1')
+        orchestrator.tallyfy_client.get_run_form_fields.assert_not_called()
+
+    def test_an_api_failure_is_not_swallowed(self):
+        orchestrator = self.build()
+        orchestrator.tallyfy_client.update_task_form_field_values.side_effect = (
+            RuntimeError('500 from the API')
+        )
+        with pytest.raises(RuntimeError):
+            orchestrator._migrate_form_values(self.RUN, 'run_1')

@@ -22,13 +22,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from api.pipefy_client import PipefyClient
 from api.tallyfy_client import TallyfyClient
-from transformers.phase_transformer import PhaseTransformer
+from transformers.phase_transformer import PhaseToStepTransformer
 from transformers.field_transformer import FieldTransformer
 from utils.id_mapper import IDMapper
 from utils.progress_tracker import ProgressTracker
 from utils.validator import MigrationValidator
 from utils.logger_config import setup_logging
 from utils.database_migrator import DatabaseMigrator
+
+# The repo root holds the shared package; the sys.path line above only adds the
+# pipefy vendor root, so `import shared` would fail without this.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from shared.form_field_values import (
+    build_task_form_field_payloads,
+    extract_run_form_fields,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +116,7 @@ class PipefyMigrationOrchestrator:
         self.id_mapper = IDMapper(mapping_db_path)
         
         # Initialize transformers
-        self.phase_transformer = PhaseTransformer(self.id_mapper)
+        self.phase_transformer = PhaseToStepTransformer(self.id_mapper)
         self.field_transformer = FieldTransformer(self.id_mapper)
         
         # Initialize progress tracker
@@ -681,7 +689,7 @@ class PipefyMigrationOrchestrator:
     def _transform_pipe_to_checklist(self, pipe: Dict[str, Any]) -> Dict[str, Any]:
         """Transform Pipefy pipe to Tallyfy checklist"""
         # Use phase transformer
-        return self.phase_transformer.transform_pipe(pipe)
+        return self.phase_transformer.transform_pipe_to_checklist(pipe)
     
     def _transform_card_to_process(self, card: Dict[str, Any], checklist_id: str) -> Dict[str, Any]:
         """Transform Pipefy card to Tallyfy process"""
@@ -699,27 +707,82 @@ class PipefyMigrationOrchestrator:
         }
     
     def _migrate_card_fields(self, card: Dict[str, Any], run_id: str):
-        """Migrate card field values to process"""
-        for field in card.get('fields', []):
-            try:
-                # Transform field value
-                transformed = self.field_transformer.transform_field_value(field)
-                
-                if transformed:
-                    capture_id = self.id_mapper.get_tallyfy_id(
-                        field.get('field', {}).get('id'), 
-                        "field"
-                    )
-                    
-                    if capture_id:
-                        self.tallyfy_client.set_capture_value(
-                            run_id, 
-                            capture_id, 
-                            transformed['value']
-                        )
-            except Exception as e:
-                logger.warning(f"Failed to migrate field value: {e}")
-    
+        """
+        Write a card's field values onto the process that was created from it.
+
+        Values are keyed by the target field's ``timeline_id`` and encoded for
+        the field's type by the shared encoder, then written per task through
+        the bulk ``taskdata`` writer. Both are load-bearing: the API ignores any
+        key that is not a ``timeline_id``, and a stringified value breaks
+        dropdown, multi-select, table and assignee fields -- in every case the
+        write still succeeds, so the loss is invisible without this care.
+
+        Raises on any value that cannot be placed. A card whose fields silently
+        vanish is worse than a card that fails loudly and can be retried; the
+        caller counts the failure and honours ``continue_on_error``.
+        """
+        raw_values, labels = self._collect_card_field_values(card)
+        if not raw_values:
+            return
+
+        form_fields = extract_run_form_fields(
+            self.tallyfy_client.get_run_form_fields(run_id)
+        )
+
+        payloads = build_task_form_field_payloads(
+            raw_values, form_fields, strict=True, fallback_keys=labels
+        )
+
+        for task_id, taskdata in payloads.items():
+            self.tallyfy_client.update_task_form_field_values(
+                run_id, task_id, taskdata
+            )
+
+        logger.debug(
+            "Migrated %d field value(s) across %d task(s) for process %s",
+            len(raw_values), len(payloads), run_id,
+        )
+
+    def _collect_card_field_values(self, card: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, List[str]]]:
+        """
+        Flatten a Pipefy card's fields into ``{key: value}`` plus resolution hints.
+
+        The key is the Tallyfy capture id this field was mapped to at template
+        time when that mapping exists, and the Pipefy field id otherwise. The
+        hints add the Pipefy field id and label as fallbacks, so a value still
+        resolves when the id mapping is missing but the label survived.
+
+        Pipefy returns multi-value fields in ``array_value`` and everything else
+        in ``value``; ``array_value`` wins when present so multi-selects keep
+        their list shape instead of collapsing to a string.
+        """
+        raw_values: Dict[str, Any] = {}
+        labels: Dict[str, List[str]] = {}
+
+        for field in card.get('fields', []) or []:
+            definition = field.get('field') or {}
+            source_id = definition.get('id')
+            label = definition.get('label')
+
+            array_value = field.get('array_value')
+            value = array_value if array_value not in (None, []) else field.get('value')
+            if value in (None, ''):
+                continue
+
+            key = self.id_mapper.get_tallyfy_id(source_id, "field") or source_id
+            if key in (None, ''):
+                logger.warning(
+                    "Skipping a card field with no id and no mapping: %r", definition
+                )
+                continue
+
+            raw_values[key] = value
+            hints = [h for h in (source_id, label) if h not in (None, '', key)]
+            if hints:
+                labels[key] = hints
+
+        return raw_values, labels
+
     def _migrate_card_comments(self, comments: List[Dict], run_id: str):
         """Migrate card comments to process"""
         for comment in comments:

@@ -492,21 +492,95 @@ class TallyfyClient:
         
         return result
     
-    def set_capture_value(self, run_id: str, capture_id: str, value: Any) -> Dict[str, Any]:
+    def get_run_form_fields(self, run_id: str) -> Dict[str, Any]:
         """
-        Set a capture field value in a process
-        
+        Read every form field on a process, with the ids needed to write to it.
+
+        Endpoint: ``GET /organizations/{org}/runs/{run_id}/form-fields``
+
+        Each returned field carries ``id`` (which IS the ``timeline_id``),
+        ``field_type``, ``options``, ``columns`` and ``task_id`` -- everything
+        ``update_task_form_field_values`` needs. Kick-off fields come back under
+        ``ko_form_fields``, step fields under ``form_fields``.
+
         Args:
             run_id: Process ID
-            capture_id: field field ID
-            value: Field value
-            
+
         Returns:
-            Updated field value
+            The API response.
         """
-        data = {'value': value}
-        return self._make_request('PUT', f'/api/organizations/{self.organization_id}/runs/{run_id}/captures/{capture_id}/value', 
-                                 json=data)
+        return self._make_request('GET', f'/runs/{run_id}/form-fields')
+
+    def update_task_form_field_values(self, run_id: str, task_id: str,
+                                      taskdata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Write form-field values onto one task of a process.
+
+        Endpoint: ``PUT /organizations/{org}/runs/{run_id}/tasks/{task_id}``
+        Body:     ``{"taskdata": {"<timeline_id>": <typed value>, ...}}``
+
+        This is the canonical bulk writer (``Task::setTaskdataAttribute`` ->
+        ``Task::updateCaptureValues``). It keys strictly by the field's
+        ``timeline_id``; any other key is ignored and the write still returns
+        200, so the value is lost without an error.
+
+        Args:
+            run_id: Process ID
+            task_id: Task ID, as given by the field's ``task_id``
+            taskdata: ``{timeline_id: encoded value}``. Encode with
+                ``shared.prerun_encoder.encode_field_value`` -- stringifying
+                breaks dropdown, multi-select, table and assignee fields.
+
+        Returns:
+            The API response.
+        """
+        if not taskdata:
+            raise ValueError('taskdata is empty: nothing to write.')
+
+        return self._make_request(
+            'PUT', f'/runs/{run_id}/tasks/{task_id}', json={'taskdata': taskdata}
+        )
+
+    def set_form_field_value(self, form_field_value_id: str, value: Any) -> Dict[str, Any]:
+        """
+        Set ONE form-field value on an existing process.
+
+        Endpoint: ``PUT /organizations/{org}/form-field/value``
+        Body:     ``{"id": <capture-value id>, "form_value": <typed value>}``
+
+        Args:
+            form_field_value_id: The id of the CAPTURE VALUE row, which is what
+                the API resolves (``CaptureValue::find($data['id'])``). It is
+                NOT a capture/field definition id and NOT a ``timeline_id``;
+                sending either of those returns an error, not a silent no-op.
+            value: The value, already encoded for the field's type. Use
+                ``shared.prerun_encoder.encode_field_value`` -- a stringified
+                value breaks dropdown, multi-select, table and assignee fields,
+                and a multi-select entry without ``"selected": true`` stores but
+                renders empty wherever the field is used as a ``{{variable}}``.
+
+        Returns:
+            The API response.
+
+        Note:
+            Capture-value ids are not discoverable through the API, so a
+            migration cannot normally reach this endpoint. To write values onto
+            a migrated process, read the fields from
+            ``GET /runs/{run_id}/form-fields`` and write them per task with
+            ``update_task_form_field_values`` -- that path keys by
+            ``timeline_id``, which the response does expose.
+        """
+        if not form_field_value_id:
+            raise ValueError(
+                'form_field_value_id is required: the API resolves the capture '
+                'value by id and cannot infer it.'
+            )
+
+        return self._make_request(
+            'PUT',
+            '/form-field/value',
+            json={'id': form_field_value_id, 'form_value': value},
+        )
     
     # Comment Methods
     def create_comment(self, entity_type: str, entity_id: str, comment_data: Dict[str, Any]) -> Dict[str, Any]:
