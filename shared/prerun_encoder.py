@@ -522,7 +522,39 @@ def build_prerun_payload(
             )
             continue
 
-        payload[str(timeline_id)] = encode_field_value(raw_value, capture, **options)
+        encoded = encode_field_value(raw_value, capture, **options)
+
+        if encoded in (None, []) and raw_value not in (None, '', [], {}):
+            unresolved.append(key)
+            logger.warning(
+                "Kick-off value %r for %r could not be encoded for field_type %r; "
+                "it will not be migrated rather than written as an empty value.",
+                raw_value, key, capture.get('field_type') or capture.get('type'),
+            )
+            continue
+
+        field_type = capture.get('field_type') or capture.get('type')
+        if field_type == 'assignees_form' and raw_value not in (None, '', [], {}):
+            # A pre-shaped dict with empty lists is legitimately empty, not loss.
+            is_preshaped_empty = (
+                isinstance(raw_value, dict)
+                and any(k in raw_value for k in ('users', 'guests', 'groups'))
+                and not any(raw_value.get(k) for k in ('users', 'guests', 'groups'))
+            )
+            if (
+                not is_preshaped_empty
+                and isinstance(encoded, dict)
+                and not any(encoded.get(k) for k in ('users', 'guests', 'groups'))
+            ):
+                unresolved.append(key)
+                logger.warning(
+                    "Kick-off assignee value %r for %r resolved to nobody; "
+                    "it will not be migrated rather than written as empty assignees.",
+                    raw_value, key,
+                )
+                continue
+
+        payload[str(timeline_id)] = encoded
 
     if unresolved and strict:
         available = [
