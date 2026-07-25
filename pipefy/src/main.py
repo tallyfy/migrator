@@ -806,7 +806,7 @@ class PipefyMigrationOrchestrator:
         fields returns an empty ``prerun`` and every value unchanged, which is
         the behaviour that predates this method.
         """
-        raw_values, _labels = self._collect_card_field_values(card)
+        raw_values, labels = self._collect_card_field_values(card)
         if not raw_values:
             return {}, {}
 
@@ -830,8 +830,13 @@ class PipefyMigrationOrchestrator:
         kickoff_raw: Dict[str, Any] = {}
         task_values: Dict[str, Any] = {}
         for key, value in raw_values.items():
-            if resolve_capture(key, captures) is not None:
-                kickoff_raw[key] = value
+            candidates = [key] + labels.get(key, [])
+            match = next(
+                (c for c in candidates if resolve_capture(c, captures) is not None),
+                None,
+            )
+            if match is not None:
+                kickoff_raw[match] = value
             else:
                 task_values[key] = value
 

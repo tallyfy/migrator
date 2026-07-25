@@ -443,7 +443,6 @@ class MigrationOrchestrator:
                                 self.id_mapper.add_mapping(
                                     source_field_id, str(live_id), 'field'
                                 )
-                        self._store_field_label(capture)
 
                 successful += 1
                 logger.debug(f"Created template: {tallyfy_checklist.get('title', 'Untitled')}")
