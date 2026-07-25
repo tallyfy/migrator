@@ -101,7 +101,9 @@ def _is_emptied_assignees(field: Dict[str, Any], raw_value: Any, encoded: Any) -
     # field, not loss -- without this, an unselected member field (Process
     # Street keeps `[]` form values) would raise under strict=True and block
     # every other value on the run.
-    if isinstance(raw_value, dict) and not any(
+    if isinstance(raw_value, dict) and any(
+        key in raw_value for key in ('users', 'guests', 'groups')
+    ) and not any(
         raw_value.get(key) for key in ('users', 'guests', 'groups')
     ):
         return False

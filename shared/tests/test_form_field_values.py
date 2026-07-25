@@ -595,6 +595,30 @@ class TestAssigneeValuesNeverWriteNobodySilently:
             'users': [], 'guests': [], 'groups': [],
         }
 
+    @pytest.mark.parametrize('raw', [
+        {'id': 42},
+        {'id': '42', 'email': 'not-an-email'},
+        {'user_id': 99},
+    ])
+    def test_an_unmapped_assignee_object_raises_in_strict_mode(self, raw):
+        """
+        A bare source object like ``{"id": 42}`` that fails to map must not be
+        silently written as an empty assignee payload. ``_is_emptied_assignees``
+        must distinguish it from a legitimately empty ``{"users": [], ...}`` dict.
+        """
+        with pytest.raises(UnresolvedFormFieldError):
+            build_task_form_field_payloads({'owner': raw}, self.fields(), strict=True)
+
+    def test_an_unmapped_assignee_object_is_omitted_not_written_empty(self):
+        payloads = build_task_form_field_payloads(
+            {'owner': {'id': 42}}, self.fields(), strict=False
+        )
+        written = payloads.get(TASK_ONE, {})
+        assert self.TL_OWNER not in written, (
+            f'wrote {written.get(self.TL_OWNER)!r} -- an unmapped source object '
+            'was silently encoded as an empty assignee payload'
+        )
+
     def test_other_field_types_are_untouched_by_the_guard(self):
         fields = [{'id': TL_NOTES, 'alias': 'notes', 'label': 'Notes',
                    'field_type': 'textarea', 'task_id': TASK_ONE}]
