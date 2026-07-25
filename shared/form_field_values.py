@@ -85,6 +85,22 @@ class MissingTaskBindingError(FormFieldValueError):
     """
 
 
+def _is_emptied_assignees(field: Dict[str, Any], raw_value: Any, encoded: Any) -> bool:
+    """
+    True when an assignees_form field had a source value but encoded to nobody.
+
+    Distinguishes real loss from a legitimately empty field: a blank source value
+    encoding to no assignees is correct and must NOT be reported.
+    """
+    if (field.get('field_type') or field.get('type')) != 'assignees_form':
+        return False
+    if raw_value in (None, '', [], {}):
+        return False
+    if not isinstance(encoded, dict):
+        return False
+    return not any(encoded.get(key) for key in ('users', 'guests', 'groups'))
+
+
 def extract_run_form_fields(response: Any) -> List[Dict[str, Any]]:
     """
     Pull the form-field definitions out of a ``runs/{id}/form-fields`` response.
@@ -236,9 +252,24 @@ def build_task_form_field_payloads(
                 'includes task_id for every field.'
             )
 
-        payloads.setdefault(str(task_id), {})[str(timeline_id)] = encode_field_value(
-            raw_value, field, **options
-        )
+        encoded = encode_field_value(raw_value, field, **options)
+
+        # `assignees_form` resolves only email-shaped candidates (deliberately --
+        # it mirrors the middleware). Source systems key assignee fields by user
+        # ID or display name, so a non-empty source value can encode to an EMPTY
+        # assignee payload. Writing that returns 200 with the assignees gone,
+        # which is precisely the silent loss this module exists to prevent.
+        if _is_emptied_assignees(field, raw_value, encoded):
+            unresolved.append(source_key)
+            logger.warning(
+                'Assignee value %r for %r resolved to nobody. assignees_form '
+                'matches on email; map source user IDs to emails (or to '
+                '{"users": [...]}) before encoding.',
+                raw_value, source_key,
+            )
+            continue
+
+        payloads.setdefault(str(task_id), {})[str(timeline_id)] = encoded
 
     if unresolved and strict:
         available = [

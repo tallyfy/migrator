@@ -242,6 +242,66 @@ class TestExtractRunFormFields:
         assert extract_run_form_fields({}) == []
 
 
+class TestAssigneeValuesNeverWriteNobodySilently:
+    """
+    `assignees_form` resolves only email-shaped candidates. Source systems key
+    assignee fields by user ID or display name, so a non-empty source value can
+    encode to an EMPTY assignee payload -- a 200 with the assignees gone.
+    """
+
+    TL_OWNER = 'aabbccddeeff00112233445566778899'
+
+    def fields(self):
+        return [{'id': self.TL_OWNER, 'alias': 'owner', 'label': 'Owner',
+                 'field_type': 'assignees_form', 'task_id': TASK_ONE}]
+
+    @pytest.mark.parametrize('raw', [12345, 'Jane Doe', ['7', '8']])
+    def test_unresolvable_assignees_raise_in_strict_mode(self, raw):
+        with pytest.raises(UnresolvedFormFieldError):
+            build_task_form_field_payloads({'owner': raw}, self.fields(), strict=True)
+
+    @pytest.mark.parametrize('raw', [12345, 'Jane Doe'])
+    def test_unresolvable_assignees_are_omitted_not_written_empty(self, raw):
+        payloads = build_task_form_field_payloads(
+            {'owner': raw}, self.fields(), strict=False
+        )
+        written = payloads.get(TASK_ONE, {})
+        assert self.TL_OWNER not in written, (
+            f'wrote {written.get(self.TL_OWNER)!r} -- an empty assignee payload '
+            'is silent data loss'
+        )
+
+    def test_an_email_still_encodes_normally(self):
+        payloads = build_task_form_field_payloads(
+            {'owner': 'someone@example.com'}, self.fields(), strict=True
+        )
+        assert payloads[TASK_ONE][self.TL_OWNER] == {
+            'users': [], 'guests': ['someone@example.com'], 'groups': [],
+        }
+
+    def test_a_preshaped_dict_still_encodes_normally(self):
+        payloads = build_task_form_field_payloads(
+            {'owner': {'users': [7]}}, self.fields(), strict=True
+        )
+        assert payloads[TASK_ONE][self.TL_OWNER]['users'] == [7]
+
+    @pytest.mark.parametrize('raw', [None, '', [], {}])
+    def test_a_legitimately_empty_assignee_field_is_not_flagged(self, raw):
+        """An empty source value encoding to no assignees is correct, not loss."""
+        payloads = build_task_form_field_payloads(
+            {'owner': raw}, self.fields(), strict=True
+        )
+        assert payloads[TASK_ONE][self.TL_OWNER] == {
+            'users': [], 'guests': [], 'groups': [],
+        }
+
+    def test_other_field_types_are_untouched_by_the_guard(self):
+        fields = [{'id': TL_NOTES, 'alias': 'notes', 'label': 'Notes',
+                   'field_type': 'textarea', 'task_id': TASK_ONE}]
+        payloads = build_task_form_field_payloads({'notes': ''}, fields, strict=True)
+        assert TL_NOTES in payloads[TASK_ONE]
+
+
 class TestBuildTaskFormFieldPayloads:
 
     FIELDS = extract_run_form_fields(run_form_fields_response())
