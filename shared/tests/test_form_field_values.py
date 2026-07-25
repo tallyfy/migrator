@@ -327,6 +327,55 @@ class TestUnencodableValuesAreNeverWritten:
         payloads = build_task_form_field_payloads({'tags': []}, fields, strict=True)
         assert payloads[TASK_ONE][TL_TAGS] == []
 
+    def test_a_list_of_file_urls_is_encoded_as_file_descriptors(self):
+        """
+        Pipefy's `array_value` for an attachment field is `[String]` -- a list of
+        URLs. Passing that list through unchanged writes bare strings where the
+        API expects file descriptors, so the attachments are lost.
+        """
+        fields = [{'id': TL_NOTES, 'alias': 'docs', 'field_type': 'file',
+                   'task_id': TASK_ONE}]
+        payloads = build_task_form_field_payloads(
+            {'docs': ['https://x.example.com/a.pdf', 'https://x.example.com/b.pdf']},
+            fields, strict=True,
+        )
+        encoded = payloads[TASK_ONE][TL_NOTES]
+        assert [f['filename'] for f in encoded] == ['a.pdf', 'b.pdf']
+        assert all(f['source'] == 'url' for f in encoded)
+
+    def test_already_shaped_file_descriptors_are_left_alone(self):
+        fields = [{'id': TL_NOTES, 'alias': 'docs', 'field_type': 'file',
+                   'task_id': TASK_ONE}]
+        payloads = build_task_form_field_payloads(
+            {'docs': [{'filename': 'a.pdf', 'url': 'u', 'source': 'url'}]},
+            fields, strict=True,
+        )
+        assert payloads[TASK_ONE][TL_NOTES] == [
+            {'filename': 'a.pdf', 'url': 'u', 'source': 'url'}
+        ]
+
+    def test_a_single_label_in_array_value_still_matches(self):
+        """
+        Pipefy stores label fields in `array_value`, and `label_select` maps to a
+        single-choice `dropdown`. One label is unambiguous and must still match.
+        """
+        fields = [{'id': TL_PLAN, 'alias': 'labels', 'field_type': 'dropdown',
+                   'task_id': TASK_ONE, 'options': [{'id': 1, 'text': 'Bug'}]}]
+        payloads = build_task_form_field_payloads(
+            {'labels': ['Bug']}, fields, strict=True
+        )
+        assert payloads[TASK_ONE][TL_PLAN] == {'id': 1, 'text': 'Bug'}
+
+    def test_multiple_labels_on_a_single_choice_field_fail_loudly(self):
+        """Two labels genuinely cannot fit one dropdown -- that must not be guessed."""
+        fields = [{'id': TL_PLAN, 'alias': 'labels', 'field_type': 'dropdown',
+                   'task_id': TASK_ONE,
+                   'options': [{'id': 1, 'text': 'Bug'}, {'id': 2, 'text': 'Urgent'}]}]
+        with pytest.raises(UnresolvedFormFieldError):
+            build_task_form_field_payloads(
+                {'labels': ['Bug', 'Urgent']}, fields, strict=True
+            )
+
     def test_a_legitimately_empty_value_is_still_written(self):
         """Empty is a real value; only unencodable non-empty input is withheld."""
         fields = [{'id': TL_NOTES, 'alias': 'notes', 'field_type': 'textarea',
