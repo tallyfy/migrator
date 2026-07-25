@@ -489,9 +489,16 @@ class PipefyMigrationOrchestrator:
                     # the pipe rather than a warning: a step whose fields are
                     # missing silently loses every card value written to it.
                     for position, capture in enumerate(step_captures, start=1):
-                        self.tallyfy_client.create_step_capture(
+                        created_capture = self.tallyfy_client.create_step_capture(
                             checklist_id, created_step['id'], capture, position=position,
                         )
+                        source_field_id = capture.get('external_ref')
+                        if source_field_id and isinstance(created_capture, dict):
+                            live_id = created_capture.get('id')
+                            if live_id:
+                                self.id_mapper.add_mapping(
+                                    source_field_id, str(live_id), 'field'
+                                )
 
                 successful += 1
                 logger.debug(f"Created checklist: {checklist_data.get('title')}")
