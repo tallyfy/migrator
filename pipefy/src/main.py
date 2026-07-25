@@ -38,6 +38,8 @@ from shared.form_field_values import (
     extract_run_form_fields,
     reshape_assignee_values,
 )
+from shared.kickoff_fields import KickoffFieldCache
+from shared.prerun_encoder import build_prerun_payload, resolve_capture
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +117,10 @@ class PipefyMigrationOrchestrator:
         # Initialize ID mapper
         mapping_db_path = self.config['storage']['mapping_database']['path']
         self.id_mapper = IDMapper(mapping_db_path)
+
+        # Kick-off field definitions, read once per template. Needed to resolve
+        # a card's values to timeline_ids before launch -- see _split_kickoff_values.
+        self.kickoff_cache = KickoffFieldCache(self.tallyfy_client)
         
         # Initialize transformers
         self.phase_transformer = PhaseToStepTransformer(self.id_mapper)
@@ -551,7 +557,16 @@ class PipefyMigrationOrchestrator:
                 try:
                     # Transform card to process
                     process_data = self._transform_card_to_process(card, checklist_id)
-                    
+
+                    # Kick-off values have to ride the LAUNCH request. They live
+                    # on the run rather than on any task, so the post-launch
+                    # taskdata path cannot reach them -- and a REQUIRED kick-off
+                    # field fails the launch outright with a 422, losing the
+                    # whole card rather than one value.
+                    prerun, task_values = self._split_kickoff_values(card, checklist_id)
+                    if prerun:
+                        process_data['prerun'] = prerun
+
                     # Create process in Tallyfy
                     created_process = self.tallyfy_client.create_process(process_data)
                     run_id = created_process['id']
@@ -560,7 +575,10 @@ class PipefyMigrationOrchestrator:
                     self.id_mapper.add_mapping(card['id'], run_id, 'process')
                     
                     # Migrate field values
-                    self._migrate_card_fields(card, run_id)
+                    # Values already sent as `prerun` are excluded: they have
+                    # no task to belong to, so the strict resolver would raise
+                    # on values that in fact migrated correctly.
+                    self._migrate_card_fields(card, run_id, only_values=task_values)
                     
                     # Migrate comments
                     if card.get('comments'):
@@ -771,7 +789,62 @@ class PipefyMigrationOrchestrator:
             'labels': [l.get('name') for l in card.get('labels', [])]
         }
     
-    def _migrate_card_fields(self, card: Dict[str, Any], run_id: str):
+    def _split_kickoff_values(self, card: Dict[str, Any],
+                             checklist_id: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """
+        Split a card's field values into kick-off values and step-field values.
+
+        The two halves travel by completely different routes. Kick-off values
+        belong to the run and are only settable in the LAUNCH body, as
+        ``prerun`` keyed by each field's ``timeline_id``; step-field values
+        belong to a task and are written afterwards through ``taskdata``.
+        Sending a kick-off value down the task path finds no matching field, and
+        omitting it from the launch fails that launch with a 422 whenever the
+        field is required -- losing the entire card, not just one value.
+
+        Returns ``(prerun, task_values)``. A pipe whose template has no kick-off
+        fields returns an empty ``prerun`` and every value unchanged, which is
+        the behaviour that predates this method.
+        """
+        raw_values, _labels = self._collect_card_field_values(card)
+        if not raw_values:
+            return {}, {}
+
+        try:
+            captures = self.kickoff_cache.get(checklist_id)
+        except Exception as exc:
+            # No definitions means nothing resolves to a timeline_id, so there is
+            # nothing safe to put in `prerun`. Leave every value on the task path
+            # rather than guessing: the API discards unrecognised prerun keys and
+            # still returns 201, so a guess would be silent loss.
+            logger.warning(
+                "Could not read kick-off fields for checklist %s (%s); "
+                "sending no prerun for card %s",
+                checklist_id, exc, card.get('id'),
+            )
+            return {}, raw_values
+
+        if not captures:
+            return {}, raw_values
+
+        kickoff_raw: Dict[str, Any] = {}
+        task_values: Dict[str, Any] = {}
+        for key, value in raw_values.items():
+            if resolve_capture(key, captures) is not None:
+                kickoff_raw[key] = value
+            else:
+                task_values[key] = value
+
+        if not kickoff_raw:
+            return {}, task_values
+
+        # strict: an unresolvable key would be dropped server-side with a 201, so
+        # silence would be silent data loss. Every key was just proven resolvable,
+        # so this should never fire -- if it does, cache and encoder disagree.
+        return build_prerun_payload(kickoff_raw, captures, strict=True), task_values
+
+    def _migrate_card_fields(self, card: Dict[str, Any], run_id: str,
+                             only_values: Optional[Dict[str, Any]] = None):
         """
         Write a card's field values onto the process that was created from it.
 
@@ -785,8 +858,15 @@ class PipefyMigrationOrchestrator:
         Raises on any value that cannot be placed. A card whose fields silently
         vanish is worse than a card that fails loudly and can be retried; the
         caller counts the failure and honours ``continue_on_error``.
+
+        ``only_values`` lets the caller pass just the STEP-field half, with
+        anything already sent as ``prerun`` removed. Kick-off values have no
+        task to belong to, so leaving them in would make the strict resolver
+        raise on values that in fact migrated correctly.
         """
         raw_values, labels = self._collect_card_field_values(card)
+        if only_values is not None:
+            raw_values = {k: v for k, v in raw_values.items() if k in only_values}
         if not raw_values:
             return
 

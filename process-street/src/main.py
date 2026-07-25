@@ -39,6 +39,8 @@ from shared.form_field_values import (
     extract_run_form_fields,
     reshape_assignee_values,
 )
+from shared.kickoff_fields import KickoffFieldCache
+from shared.prerun_encoder import build_prerun_payload, resolve_capture
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +124,11 @@ class MigrationOrchestrator:
         # Initialize ID mapper
         mapping_db_path = self.config['storage']['mapping_database']['path']
         self.id_mapper = IDMapper(mapping_db_path)
-        
+
+        # Kick-off field definitions, read once per template. Needed to resolve
+        # a run's values to timeline_ids before launch -- see _split_kickoff_values.
+        self.kickoff_cache = KickoffFieldCache(self.tallyfy_client)
+
         # Initialize transformers
         self.user_transformer = UserTransformer(self.id_mapper)
         self.template_transformer = TemplateTransformer(self.id_mapper)
@@ -488,6 +494,13 @@ class MigrationOrchestrator:
                     logger.warning(f"Checklist not found for workflow {workflow_id}, skipping run")
                     continue
                 
+                # Kick-off values have to ride the LAUNCH request. They live on
+                # the run rather than on any task, so the post-launch taskdata
+                # path below cannot reach them at all -- and a REQUIRED kick-off
+                # field fails the launch outright with a 422, which would take
+                # the whole run down rather than just lose one value.
+                prerun, task_values = self._split_kickoff_values(ps_run, checklist_id)
+
                 # Create process in Tallyfy
                 process_data = {
                     'checklist_id': checklist_id,
@@ -496,19 +509,23 @@ class MigrationOrchestrator:
                     'created_at': self.user_transformer.convert_datetime(ps_run.get('created_at')),
                     'external_ref': ps_run.get('id')
                 }
-                
+                if prerun:
+                    process_data['prerun'] = prerun
+
                 created_process = self.tallyfy_client.create_process(process_data)
                 run_id = created_process['id']
-                
+
                 # Map process ID
                 self.id_mapper.add_mapping(ps_run['id'], run_id, 'process')
-                
+
                 # Update step instances with completion status
                 if config.get('preserve_progress', True):
                     self._migrate_step_progress(ps_run, run_id)
-                
-                # Migrate form values
-                self._migrate_form_values(ps_run, run_id)
+
+                # Migrate the values that belong to STEP fields. Anything already
+                # placed in `prerun` is excluded, or it would be looked up among
+                # the task fields, not found, and raise.
+                self._migrate_form_values(ps_run, run_id, form_values=task_values)
                 
                 successful += 1
                 logger.debug(f"Created process: {process_data['title']}")
@@ -636,7 +653,78 @@ class MigrationOrchestrator:
         if ps_field_id and label:
             self.id_mapper.add_mapping(ps_field_id, label, 'field_label')
     
-    def _migrate_form_values(self, ps_run: Dict, run_id: str):
+    def _split_kickoff_values(self, ps_run: Dict,
+                             checklist_id: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """
+        Split a run's form values into kick-off values and step-field values.
+
+        The two halves travel by completely different routes. Kick-off values
+        belong to the run and are only settable in the LAUNCH body, as
+        ``prerun`` keyed by each field's ``timeline_id``; step-field values
+        belong to a task and are written afterwards through ``taskdata``.
+        Sending a kick-off value down the task path finds no matching field, and
+        omitting it from the launch fails that launch with a 422 whenever the
+        field is required -- losing the entire run, not just one value.
+
+        Returns ``(prerun, task_values)``. Both may be empty. A template with no
+        kick-off fields returns an empty ``prerun`` and every value unchanged,
+        which is the behaviour that predates this method.
+        """
+        form_values = ps_run.get('formValues', {}) or {}
+        if not form_values:
+            return {}, {}
+
+        try:
+            captures = self.kickoff_cache.get(checklist_id)
+        except Exception as exc:
+            # No definitions means nothing can be resolved to a timeline_id, so
+            # there is nothing safe to put in `prerun`. Leave every value on the
+            # task path rather than guessing: the API discards unrecognised
+            # prerun keys and still returns 201, so a guess would be silent loss.
+            logger.warning(
+                "Could not read kick-off fields for checklist %s (%s); "
+                "sending no prerun for run %s",
+                checklist_id, exc, ps_run.get('id'),
+            )
+            return {}, form_values
+
+        if not captures:
+            return {}, form_values
+
+        kickoff_raw: Dict[str, Any] = {}
+        task_values: Dict[str, Any] = {}
+        for field_id, value in form_values.items():
+            # Match on the same identifiers the encoder resolves against, and on
+            # the ids this migration recorded for the field at template time.
+            candidates = [field_id]
+            mapped = self.id_mapper.get_tallyfy_id(field_id, "field")
+            if mapped:
+                candidates.append(mapped)
+            label = self.id_mapper.get_tallyfy_id(field_id, 'field_label')
+            if label:
+                candidates.append(label)
+
+            match = next(
+                (c for c in candidates if resolve_capture(c, captures) is not None),
+                None,
+            )
+            if match is None:
+                task_values[field_id] = value
+            else:
+                kickoff_raw[match] = value
+
+        if not kickoff_raw:
+            return {}, task_values
+
+        # strict: an unresolvable key here would be dropped server-side with a
+        # 201, so silence would be silent data loss. Every key was just proven
+        # resolvable above, so strict mode should never fire -- if it does, the
+        # cache and the encoder disagree and that is worth failing on.
+        prerun = build_prerun_payload(kickoff_raw, captures, strict=True)
+        return prerun, task_values
+
+    def _migrate_form_values(self, ps_run: Dict, run_id: str,
+                             form_values: Optional[Dict[str, Any]] = None):
         """
         Write a run's form values onto the process that was created from it.
 
@@ -651,8 +739,14 @@ class MigrationOrchestrator:
         run whose form values silently vanish is worse than one that fails
         loudly and can be retried. The caller counts the failure and honours
         ``continue_on_error``.
+
+        ``form_values`` lets the caller pass only the STEP-field half of a run's
+        values, with anything already sent as ``prerun`` removed. Kick-off values
+        have no task to belong to, so leaving them in would make the strict
+        resolver raise on values that in fact migrated correctly.
         """
-        form_values = ps_run.get('formValues', {}) or {}
+        if form_values is None:
+            form_values = ps_run.get('formValues', {}) or {}
         if not form_values:
             return
 
