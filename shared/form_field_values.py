@@ -233,6 +233,20 @@ def reshape_assignee_values(
         users: List[Any] = []
         guests: List[str] = []
         for candidate in candidates:
+            # Source systems often return assignees as objects rather than bare
+            # ids -- `{"id": 42, "email": ...}`. `str()` on one of those yields
+            # the repr of a dict, which maps to nothing and is not an email, so
+            # the assignee would be lost. Unwrap to the id (or email) first.
+            if isinstance(candidate, dict):
+                candidate = (
+                    candidate.get('id')
+                    or candidate.get('email')
+                    or candidate.get('user_id')
+                    or candidate.get('username')
+                )
+                if candidate is None:
+                    continue
+
             cand_str = str(candidate).strip()
             if not cand_str:
                 continue
@@ -353,6 +367,21 @@ def build_task_form_field_payloads(
             )
 
         encoded = encode_field_value(raw_value, field, **options)
+
+        # The encoder returns None when it cannot represent the value -- a
+        # choice value matching no option, for instance (a list handed to a
+        # dropdown, which is what a Pipefy label field produces). Writing that
+        # None stores an empty field and returns 200: silent loss, and the
+        # encoder's own log line claims it is "omitting" a value it was in fact
+        # still passing through. Treat it as unresolved so strict mode raises.
+        if encoded is None and raw_value not in (None, '', [], {}):
+            unresolved.append(source_key)
+            logger.warning(
+                'Value %r for %r could not be encoded for field_type %r; it will '
+                'not be migrated rather than written as an empty value.',
+                raw_value, source_key, field.get('field_type') or field.get('type'),
+            )
+            continue
 
         # `assignees_form` resolves only email-shaped candidates (deliberately --
         # it mirrors the middleware). Source systems key assignee fields by user

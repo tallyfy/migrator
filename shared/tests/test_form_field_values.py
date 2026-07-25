@@ -243,6 +243,74 @@ class TestExtractRunFormFields:
         assert extract_run_form_fields({}) == []
 
 
+class TestUnencodableValuesAreNeverWritten:
+    """
+    The encoder returns None when it cannot represent a value. Writing that None
+    stores an empty field and returns 200 -- silent loss. Its own log line even
+    claimed it was "omitting" a value it was still passing through.
+    """
+
+    TL_PLAN_F = 'ffffffffffffffffffffffffffffffff'
+
+    def fields(self):
+        return [{'id': self.TL_PLAN_F, 'alias': 'plan', 'label': 'Plan',
+                 'field_type': 'dropdown', 'task_id': TASK_ONE,
+                 'options': [{'id': 1, 'text': 'Pro'}]}]
+
+    def test_an_unmatchable_choice_value_raises_in_strict_mode(self):
+        with pytest.raises(UnresolvedFormFieldError):
+            build_task_form_field_payloads(
+                {'plan': ['Pro', 'Enterprise']}, self.fields(), strict=True
+            )
+
+    def test_an_unmatchable_choice_value_is_omitted_not_written_as_none(self):
+        payloads = build_task_form_field_payloads(
+            {'plan': ['Pro', 'Enterprise']}, self.fields(), strict=False
+        )
+        assert self.TL_PLAN_F not in payloads.get(TASK_ONE, {}), (
+            'wrote None -- an empty value stored with a 200 is silent loss'
+        )
+
+    def test_a_single_element_list_is_unwrapped_for_a_dropdown(self):
+        """
+        Source systems return choice fields as arrays (Pipefy `array_value` on a
+        label field). One element is unambiguous, so it must still match.
+        """
+        payloads = build_task_form_field_payloads(
+            {'plan': ['Pro']}, self.fields(), strict=True
+        )
+        assert payloads[TASK_ONE][self.TL_PLAN_F] == {'id': 1, 'text': 'Pro'}
+
+    def test_a_single_element_list_is_unwrapped_for_a_radio(self):
+        fields = [{'id': TL_PRIORITY, 'alias': 'priority', 'field_type': 'radio',
+                   'task_id': TASK_ONE,
+                   'options': [{'id': 1, 'text': 'High'}, {'id': 2, 'text': 'Low'}]}]
+        payloads = build_task_form_field_payloads(
+            {'priority': ['High']}, fields, strict=True
+        )
+        # radio takes the bare text, deliberately asymmetric with dropdown.
+        assert payloads[TASK_ONE][TL_PRIORITY] == 'High'
+
+    def test_multiselect_still_takes_lists(self):
+        fields = [{'id': TL_TAGS, 'alias': 'tags', 'field_type': 'multiselect',
+                   'task_id': TASK_ONE,
+                   'options': [{'id': 1, 'text': 'Urgent'}, {'id': 2, 'text': 'Billing'}]}]
+        payloads = build_task_form_field_payloads(
+            {'tags': ['Urgent', 'Billing']}, fields, strict=True
+        )
+        assert payloads[TASK_ONE][TL_TAGS] == [
+            {'id': 1, 'text': 'Urgent', 'selected': True},
+            {'id': 2, 'text': 'Billing', 'selected': True},
+        ]
+
+    def test_a_legitimately_empty_value_is_still_written(self):
+        """Empty is a real value; only unencodable non-empty input is withheld."""
+        fields = [{'id': TL_NOTES, 'alias': 'notes', 'field_type': 'textarea',
+                   'task_id': TASK_ONE}]
+        payloads = build_task_form_field_payloads({'notes': ''}, fields, strict=True)
+        assert TL_NOTES in payloads[TASK_ONE]
+
+
 class TestReshapeAssigneeValues:
     """
     Source systems key assignee fields by their OWN user ids. Those must be
@@ -292,6 +360,26 @@ class TestReshapeAssigneeValues:
         values = {'owner': {'users': [3], 'guests': [], 'groups': []}}
         reshape_assignee_values(values, self.fields(), user_id_mapper=lambda uid: 99)
         assert values['owner'] == {'users': [3], 'guests': [], 'groups': []}
+
+    def test_assignee_objects_are_unwrapped_to_their_id(self):
+        """
+        Source systems return assignees as objects, not bare ids. `str({...})`
+        is a dict repr: it maps to nothing and is not an email, so the assignee
+        would be lost.
+        """
+        values = {'owner': [{'id': 'ps_user_42', 'email': 'a@b.com'}]}
+        reshape_assignee_values(
+            values, self.fields(),
+            user_id_mapper=lambda uid: 7 if uid == 'ps_user_42' else None,
+        )
+        assert values['owner'] == {'users': [7], 'guests': [], 'groups': []}
+
+    def test_an_assignee_object_falls_back_to_its_email(self):
+        values = {'owner': [{'email': 'outsider@example.com'}]}
+        reshape_assignee_values(values, self.fields(), user_id_mapper=lambda uid: None)
+        assert values['owner'] == {
+            'users': [], 'guests': ['outsider@example.com'], 'groups': [],
+        }
 
     def test_non_assignee_fields_are_untouched(self):
         fields = [{'id': TL_NOTES, 'alias': 'notes', 'field_type': 'textarea',

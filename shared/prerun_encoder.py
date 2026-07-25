@@ -300,6 +300,15 @@ def encode_field_value(
 
     field_type = capture.get('field_type') or capture.get('type')
 
+    # Scalar choice types can legitimately arrive wrapped in a one-element list:
+    # several source systems return every choice field as an array (Pipefy's
+    # `array_value` on a label field, for one). One element is unambiguous, so
+    # unwrap it rather than failing to match. Two or more genuinely cannot fit a
+    # single-choice field and are left to fail loudly.
+    if field_type in ('dropdown', 'radio') and isinstance(value, (list, tuple)):
+        if len(value) == 1:
+            value = value[0]
+
     if field_type == 'dropdown':
         option = _find_option(_capture_options(capture), value)
         if option is None:
