@@ -257,49 +257,56 @@ def reshape_assignee_values(
 
         for candidate in candidates:
             # Source systems often return assignees as objects rather than bare
-            # ids -- `{"id": 42, "email": ...}`. `str()` on one of those yields
-            # the repr of a dict, which maps to nothing and is not an email, so
-            # the assignee would be lost. Unwrap to the id (or email) first.
+            # ids -- `{"id": 42, "email": ...}`.  Unwrap to a list of
+            # identifiers to try in priority order: if the primary id fails
+            # to map, sibling fields (especially email) are still tried so
+            # that unmigrated users can fall back to guest assignment.
             if isinstance(candidate, dict):
-                candidate = (
-                    candidate.get('id')
-                    or candidate.get('email')
-                    or candidate.get('user_id')
-                    or candidate.get('username')
-                )
-                if candidate is None:
+                orig = candidate
+                sub_candidates = [
+                    candidate[k]
+                    for k in ('id', 'email', 'user_id', 'username')
+                    if candidate.get(k) is not None
+                ]
+                if not sub_candidates:
                     continue
-
-            cand_str = str(candidate).strip()
-            if not cand_str:
-                continue
-
-            if user_id_mapper is not None:
-                mapped = user_id_mapper(cand_str)
-                if mapped is not None:
-                    try:
-                        users.append(int(mapped))
-                    except (TypeError, ValueError):
-                        users.append(mapped)
-                    continue
-
-            if EMAIL_REGEX.match(cand_str):
-                if cand_str not in guests:
-                    guests.append(cand_str)
             else:
-                # An unmapped candidate is NOT coerced into a Tallyfy user id.
-                # Source-system ids and Tallyfy ids are unrelated id spaces, so
-                # `int(cand_str)` would assign the task to whichever unrelated
-                # Tallyfy user holds that number -- silently wrong is worse than
-                # loudly missing. Leaving it out means the value encodes to
-                # nobody, which `build_task_form_field_payloads` reports (and
-                # raises on under strict=True).
-                logger.warning(
-                    'Assignee candidate %r could not be mapped to a Tallyfy '
-                    'user and is not an email; it will not be assigned. Ensure '
-                    'the user migration phase ran before instances.',
-                    candidate,
-                )
+                orig = candidate
+                sub_candidates = [candidate]
+
+            for sub_cand in sub_candidates:
+                cand_str = str(sub_cand).strip()
+                if not cand_str:
+                    continue
+
+                if user_id_mapper is not None:
+                    mapped = user_id_mapper(cand_str)
+                    if mapped is not None:
+                        try:
+                            users.append(int(mapped))
+                        except (TypeError, ValueError):
+                            users.append(mapped)
+                        break
+
+                if EMAIL_REGEX.match(cand_str):
+                    if cand_str not in guests:
+                        guests.append(cand_str)
+                    break
+            else:
+                # No identifier on this candidate resolved. An unmapped
+                # candidate is NOT coerced into a Tallyfy user id: source-
+                # system ids and Tallyfy ids are unrelated id spaces, so
+                # `int(cand_str)` would assign the task to whichever
+                # unrelated Tallyfy user holds that number -- silently wrong
+                # is worse than loudly missing.
+                if sub_candidates:
+                    logger.warning(
+                        'Assignee candidate %r could not be mapped to a '
+                        'Tallyfy user and is not an email; it will not be '
+                        'assigned. Ensure the user migration phase ran '
+                        'before instances.',
+                        orig,
+                    )
 
         if not users and not guests and candidates:
             # There WERE candidates and none of them resolved. Leave the raw

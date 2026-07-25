@@ -460,6 +460,21 @@ class TestReshapeAssigneeValues:
             'users': [], 'guests': ['outsider@example.com'], 'groups': [],
         }
 
+    def test_unmapped_id_falls_back_to_sibling_email(self):
+        """
+        Pipefy returns ``{id, email, name}`` for each assignee.  When the
+        user was not migrated (id miss), the email must still be tried so
+        the person becomes a guest rather than being silently dropped.
+        """
+        values = {'owner': [{'id': '42', 'email': 'guest@example.com', 'name': 'A'}]}
+        reshape_assignee_values(
+            values, self.fields(),
+            user_id_mapper=lambda uid: None,
+        )
+        assert values['owner'] == {
+            'users': [], 'guests': ['guest@example.com'], 'groups': [],
+        }
+
     def test_pipefy_nested_assignee_values_are_flattened(self):
         """
         Pipefy's CardField.assignee_values is typed `[[User]]` -- a list OF
