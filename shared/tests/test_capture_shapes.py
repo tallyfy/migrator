@@ -204,6 +204,41 @@ class TestNormalizeCapture:
         })
         assert out['options'] == [{'id': 4, 'text': 'Pro'}]
 
+    def test_mixed_numeric_and_slug_ids_never_collide(self):
+        """
+        A numeric source id is kept as-is; a slug id falls back to a generated
+        one. Generating from the positional index collided with a kept id --
+        `[{id:2},{id:'slug'}]` produced two options both numbered 2, which makes
+        value resolution by option id ambiguous.
+        """
+        out = normalize_capture({
+            'label': 'Plan', 'field_type': 'dropdown',
+            'options': [{'id': 2, 'text': 'A'}, {'id': 'slug', 'text': 'B'}],
+        })
+        ids = [o['id'] for o in out['options']]
+        assert len(set(ids)) == len(ids), f'duplicate option ids: {out["options"]}'
+        assert out['options'][0] == {'id': 2, 'text': 'A'}, 'a numeric source id must be preserved'
+
+    def test_generated_ids_skip_every_taken_numeric_id(self):
+        out = normalize_capture({
+            'label': 'Plan', 'field_type': 'multiselect',
+            'options': [{'id': 1, 'text': 'A'}, {'id': 'x', 'text': 'B'},
+                        {'id': 2, 'text': 'C'}, {'id': 'y', 'text': 'D'}],
+        })
+        ids = [o['id'] for o in out['options']]
+        assert len(set(ids)) == len(ids), f'duplicate option ids: {ids}'
+        assert all(isinstance(i, int) for i in ids)
+        # The two numeric source ids survive untouched.
+        assert out['options'][0]['id'] == 1 and out['options'][2]['id'] == 2
+
+    def test_table_column_ids_are_unique_too(self):
+        out = normalize_capture({
+            'label': 'Items', 'field_type': 'table',
+            'columns': [{'id': 2, 'label': 'SKU'}, {'id': 'qty', 'label': 'Qty'}],
+        })
+        ids = [c['id'] for c in out['columns']]
+        assert len(set(ids)) == len(ids), f'duplicate column ids: {out["columns"]}'
+
     def test_bare_string_options_are_accepted(self):
         out = normalize_capture({'label': 'Plan', 'field_type': 'radio',
                                  'options': ['Pro', 'Enterprise']})

@@ -127,6 +127,28 @@ def _has_numeric_id(raw: Any) -> bool:
     return False
 
 
+def _fill_generated_ids(
+    entries: List[Dict[str, Any]],
+    needs_generated_id: List[int],
+    taken_ids: set,
+) -> None:
+    """
+    Number the entries whose source id was not numeric, skipping any id already
+    claimed by one that was.
+
+    Generating from the positional index instead collides: ``[{id: 2}, {id: 'slug'}]``
+    yields two entries both numbered 2, and the API's option ids stop identifying
+    an option uniquely.
+    """
+    next_id = 1
+    for idx in needs_generated_id:
+        while next_id in taken_ids:
+            next_id += 1
+        entries[idx]['id'] = next_id
+        taken_ids.add(next_id)
+        next_id += 1
+
+
 def _normalize_options(raw_options: Any) -> List[Dict[str, Any]]:
     normalized: List[Dict[str, Any]] = []
     if not isinstance(raw_options, Iterable) or isinstance(raw_options, (str, bytes, dict)):
@@ -162,15 +184,7 @@ def _normalize_options(raw_options: Any) -> List[Dict[str, Any]]:
 
         normalized.append(entry)
 
-    if needs_generated_id:
-        next_id = 1
-        for idx in needs_generated_id:
-            while next_id in taken_ids:
-                next_id += 1
-            normalized[idx]['id'] = next_id
-            taken_ids.add(next_id)
-            next_id += 1
-
+    _fill_generated_ids(normalized, needs_generated_id, taken_ids)
     return normalized
 
 
@@ -178,6 +192,9 @@ def _normalize_columns(raw_columns: Any) -> List[Dict[str, Any]]:
     normalized: List[Dict[str, Any]] = []
     if not isinstance(raw_columns, Iterable) or isinstance(raw_columns, (str, bytes, dict)):
         return normalized
+
+    needs_generated_id: List[int] = []
+    taken_ids: set = set()
 
     for index, column in enumerate(raw_columns, start=1):
         if isinstance(column, dict):
@@ -190,10 +207,19 @@ def _normalize_columns(raw_columns: Any) -> List[Dict[str, Any]]:
         if label is None:
             continue
 
-        normalized.append({
-            'id': _coerce_option_id(raw_id, index),
-            'label': str(label),
-        })
+        entry: Dict[str, Any] = {'id': 0, 'label': str(label)}
+
+        # Same collision hazard as options: a table's column ids must stay
+        # distinct, because a table VALUE is matched to its columns by id.
+        if _has_numeric_id(raw_id):
+            entry['id'] = _coerce_option_id(raw_id, index)
+            taken_ids.add(entry['id'])
+        else:
+            needs_generated_id.append(len(normalized))
+
+        normalized.append(entry)
+
+    _fill_generated_ids(normalized, needs_generated_id, taken_ids)
 
     return normalized
 
