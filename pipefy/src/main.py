@@ -843,6 +843,12 @@ class PipefyMigrationOrchestrator:
         if not kickoff_raw:
             return {}, task_values
 
+        reshape_assignee_values(
+            kickoff_raw, captures,
+            fallback_keys=labels,
+            user_id_mapper=lambda uid: self.id_mapper.get_tallyfy_id(str(uid), 'user'),
+        )
+
         # strict: an unresolvable key would be dropped server-side with a 201, so
         # silence would be silent data loss. Every key was just proven resolvable,
         # so this should never fire -- if it does, cache and encoder disagree.

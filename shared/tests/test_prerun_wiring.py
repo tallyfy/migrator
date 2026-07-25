@@ -419,6 +419,7 @@ class TestProcessStreetLaunchCarriesKickoffValues:
             "import logging\n"
             "logger = logging.getLogger('t')\n"
             "from shared.prerun_encoder import build_prerun_payload, resolve_capture\n"
+            "from shared.form_field_values import reshape_assignee_values\n"
             "class M:\n"
         )
         exec(header + src[start:end], ns)
@@ -485,6 +486,7 @@ class TestPipefyLaunchCarriesKickoffValues:
             "import logging\n"
             "logger = logging.getLogger('t')\n"
             "from shared.prerun_encoder import build_prerun_payload, resolve_capture\n"
+            "from shared.form_field_values import reshape_assignee_values\n"
             "class M:\n" + src[start:end], ns)
 
         class _Cache:
@@ -493,8 +495,12 @@ class TestPipefyLaunchCarriesKickoffValues:
                     raise RuntimeError("403")
                 return captures
 
+        class _IDMapper:
+            def get_tallyfy_id(self, source_id, kind): return None
+
         obj = types.SimpleNamespace()
         obj.kickoff_cache = _Cache()
+        obj.id_mapper = _IDMapper()
         obj._collect_card_field_values = lambda card: (dict(raw_values), {})
         return ns["M"]._split_kickoff_values(obj, {"id": "card1"}, checklist_id)
 

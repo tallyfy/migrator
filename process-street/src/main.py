@@ -436,6 +436,7 @@ class MigrationOrchestrator:
                         created_capture = self.tallyfy_client.create_step_capture(
                             checklist_id, created_step['id'], capture, position=position,
                         )
+                        self._store_field_label(capture)
                         source_field_id = capture.get('external_ref')
                         if source_field_id and isinstance(created_capture, dict):
                             live_id = created_capture.get('id')
@@ -714,6 +715,11 @@ class MigrationOrchestrator:
 
         if not kickoff_raw:
             return {}, task_values
+
+        reshape_assignee_values(
+            kickoff_raw, captures,
+            user_id_mapper=lambda uid: self.id_mapper.get_tallyfy_id(str(uid), 'user'),
+        )
 
         # strict: an unresolvable key here would be dropped server-side with a
         # 201, so silence would be silent data loss. Every key was just proven
