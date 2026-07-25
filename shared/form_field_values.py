@@ -250,14 +250,19 @@ def reshape_assignee_values(
                 if cand_str not in guests:
                     guests.append(cand_str)
             else:
-                try:
-                    users.append(int(cand_str))
-                except (TypeError, ValueError):
-                    logger.warning(
-                        'Assignee candidate %r could not be mapped to a '
-                        'Tallyfy user; skipping',
-                        candidate,
-                    )
+                # An unmapped candidate is NOT coerced into a Tallyfy user id.
+                # Source-system ids and Tallyfy ids are unrelated id spaces, so
+                # `int(cand_str)` would assign the task to whichever unrelated
+                # Tallyfy user holds that number -- silently wrong is worse than
+                # loudly missing. Leaving it out means the value encodes to
+                # nobody, which `build_task_form_field_payloads` reports (and
+                # raises on under strict=True).
+                logger.warning(
+                    'Assignee candidate %r could not be mapped to a Tallyfy '
+                    'user and is not an email; it will not be assigned. Ensure '
+                    'the user migration phase ran before instances.',
+                    candidate,
+                )
 
         raw_values[key] = {'users': users, 'guests': guests, 'groups': []}
 

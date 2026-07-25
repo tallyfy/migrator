@@ -243,23 +243,23 @@ def encode_assignees_form(
         if not raw:
             continue
 
-        if EMAIL_REGEX.match(raw):
-            match = next((m for m in members if m.get('email') == raw), None)
-            if match:
-                member_id = match.get('id')
-                if not any(str(u) == str(member_id) for u in users):
-                    users.append(member_id)
-            elif raw not in guests:
-                guests.append(raw)
-        else:
-            # Numeric candidates are Tallyfy user IDs (int) -- source-system
-            # IDs should have been mapped to ints upstream by the migrator.
-            try:
-                user_id = int(raw)
-                if not any(str(u) == str(user_id) for u in users):
-                    users.append(user_id)
-            except (TypeError, ValueError):
-                pass
+        if not EMAIL_REGEX.match(raw):
+            # Deliberately NOT treated as a Tallyfy user id. A bare number here
+            # is a SOURCE-system user id, and the two id spaces are unrelated --
+            # coercing one into the other assigns the task to whichever unrelated
+            # Tallyfy user happens to hold that id, which is worse than dropping
+            # it. Map ids to Tallyfy users upstream (see
+            # ``form_field_values.reshape_assignee_values``); anything still
+            # unmapped is reported by the strict layer rather than invented here.
+            continue
+
+        match = next((m for m in members if m.get('email') == raw), None)
+        if match:
+            member_id = match.get('id')
+            if not any(str(u) == str(member_id) for u in users):
+                users.append(member_id)
+        elif raw not in guests:
+            guests.append(raw)
 
     if guests and not users and current_user_id is not None:
         users.append(current_user_id)

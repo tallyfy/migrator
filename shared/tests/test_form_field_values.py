@@ -37,6 +37,7 @@ from shared.form_field_values import (  # noqa: E402
     UnresolvedFormFieldError,
     build_task_form_field_payloads,
     extract_run_form_fields,
+    reshape_assignee_values,
 )
 
 # 32-char hex timeline_ids -- the only keys the API reads for form-field writes.
@@ -240,6 +241,97 @@ class TestExtractRunFormFields:
     def test_an_empty_response_yields_no_fields(self):
         assert extract_run_form_fields(None) == []
         assert extract_run_form_fields({}) == []
+
+
+class TestReshapeAssigneeValues:
+    """
+    Source systems key assignee fields by their OWN user ids. Those must be
+    mapped to Tallyfy users, and an unmapped one must never be invented.
+    """
+
+    TL_OWNER = 'aabbccddeeff00112233445566778899'
+
+    def fields(self):
+        return [{'id': self.TL_OWNER, 'alias': 'owner', 'label': 'Owner',
+                 'field_type': 'assignees_form', 'task_id': TASK_ONE}]
+
+    def test_source_ids_are_mapped_to_tallyfy_users(self):
+        values = {'owner': 'ps_user_42'}
+        reshape_assignee_values(
+            values, self.fields(),
+            user_id_mapper=lambda uid: 7 if uid == 'ps_user_42' else None,
+        )
+        assert values['owner'] == {'users': [7], 'guests': [], 'groups': []}
+
+    def test_an_unmapped_id_is_never_coerced_into_a_tallyfy_user_id(self):
+        """
+        `int('12345')` would assign the task to whichever unrelated Tallyfy user
+        holds id 12345. Silently wrong is worse than loudly missing.
+        """
+        values = {'owner': '12345'}
+        reshape_assignee_values(values, self.fields(), user_id_mapper=lambda uid: None)
+        assert values['owner'] == {'users': [], 'guests': [], 'groups': []}, (
+            'an unmapped source id was coerced into a Tallyfy user id'
+        )
+
+    def test_an_unmapped_id_then_raises_in_strict_mode(self):
+        """The two halves compose: unmapped -> encodes to nobody -> reported."""
+        values = {'owner': '12345'}
+        reshape_assignee_values(values, self.fields(), user_id_mapper=lambda uid: None)
+        with pytest.raises(UnresolvedFormFieldError):
+            build_task_form_field_payloads(values, self.fields(), strict=True)
+
+    def test_emails_still_become_guests(self):
+        values = {'owner': 'outsider@example.com'}
+        reshape_assignee_values(values, self.fields(), user_id_mapper=lambda uid: None)
+        assert values['owner'] == {
+            'users': [], 'guests': ['outsider@example.com'], 'groups': [],
+        }
+
+    def test_a_preshaped_value_is_left_alone(self):
+        values = {'owner': {'users': [3], 'guests': [], 'groups': []}}
+        reshape_assignee_values(values, self.fields(), user_id_mapper=lambda uid: 99)
+        assert values['owner'] == {'users': [3], 'guests': [], 'groups': []}
+
+    def test_non_assignee_fields_are_untouched(self):
+        fields = [{'id': TL_NOTES, 'alias': 'notes', 'field_type': 'textarea',
+                   'task_id': TASK_ONE}]
+        values = {'notes': '12345'}
+        reshape_assignee_values(values, fields, user_id_mapper=lambda uid: 7)
+        assert values['notes'] == '12345'
+
+    @pytest.mark.parametrize('vendor,source_file', [
+        ('pipefy', 'pipefy/src/main.py'),
+        ('process-street', 'process-street/src/main.py'),
+    ])
+    def test_live_paths_reshape_before_building_payloads(self, vendor, source_file):
+        with open(os.path.join(REPO_ROOT, source_file)) as handle:
+            source = handle.read()
+        assert 'reshape_assignee_values(' in source, f'{vendor} never reshapes assignees'
+        assert source.index('reshape_assignee_values(') < source.index(
+            'build_task_form_field_payloads('
+        ), 'assignees must be reshaped BEFORE payloads are built'
+        assert "'user'" in source, f'{vendor} must map through the user id space'
+
+
+class TestEncoderDoesNotInventUserIds:
+
+    def test_a_bare_number_is_not_treated_as_a_tallyfy_user_id(self):
+        """
+        Source-system ids and Tallyfy ids are unrelated id spaces. Mapping
+        happens upstream in reshape_assignee_values; the encoder must not guess.
+        """
+        from shared.prerun_encoder import encode_assignees_form
+        assert encode_assignees_form('12345', [], current_user_id=None) == {
+            'users': [], 'guests': [], 'groups': [],
+        }
+
+    def test_emails_still_resolve_against_members(self):
+        from shared.prerun_encoder import encode_assignees_form
+        encoded = encode_assignees_form(
+            'member@example.com', [{'id': 7, 'email': 'member@example.com'}]
+        )
+        assert encoded == {'users': [7], 'guests': [], 'groups': []}
 
 
 class TestAssigneeValuesNeverWriteNobodySilently:
