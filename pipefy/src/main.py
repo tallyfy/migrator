@@ -819,18 +819,39 @@ class PipefyMigrationOrchestrator:
         Pipefy returns multi-value fields in ``array_value`` and everything else
         in ``value``; ``array_value`` wins when present so multi-selects keep
         their list shape instead of collapsing to a string.
+
+        Exceptions:
+        - Single-select types (``label_select``, ``select``, ``radio``) always
+          use the scalar ``value``; their ``array_value`` is a list that the
+          dropdown encoder cannot match against option text.
+        - ``assignee_select`` reads from ``assignee_values`` (a ``[User]``
+          list), which carries structured ``{id, email, name}`` dicts that
+          ``reshape_assignee_values`` can map through the user id mapper.
         """
         raw_values: Dict[str, Any] = {}
         labels: Dict[str, List[str]] = {}
+
+        _SCALAR_PIPEFY_TYPES = frozenset({'label_select', 'select', 'radio'})
 
         for field in card.get('fields', []) or []:
             definition = field.get('field') or {}
             source_id = definition.get('id')
             label = definition.get('label')
+            pipefy_type = definition.get('type')
 
-            array_value = field.get('array_value')
-            value = array_value if array_value not in (None, []) else field.get('value')
-            if value in (None, ''):
+            if pipefy_type == 'assignee_select':
+                assignee_vals = field.get('assignee_values')
+                if assignee_vals:
+                    value = assignee_vals
+                else:
+                    value = field.get('value')
+            elif pipefy_type in _SCALAR_PIPEFY_TYPES:
+                value = field.get('value')
+            else:
+                array_value = field.get('array_value')
+                value = array_value if array_value not in (None, []) else field.get('value')
+
+            if value in (None, '', []):
                 continue
 
             key = self.id_mapper.get_tallyfy_id(source_id, "field") or source_id

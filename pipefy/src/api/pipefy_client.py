@@ -407,6 +407,11 @@ class PipefyClient:
                                     }
                                     value
                                     array_value
+                                    assignee_values {
+                                        id
+                                        email
+                                        name
+                                    }
                                     filled_at
                                     updated_at
                                 }
