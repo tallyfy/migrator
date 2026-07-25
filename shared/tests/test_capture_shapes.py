@@ -417,6 +417,40 @@ class TestAliasesCoverWhatTheTransformersActuallyEmit:
             f'expected {expected!r}'
         )
 
+    # Pipefy source types that carry options. `_create_field_config` receives the
+    # SOURCE type (`transform()` calls `_map_field_type` separately for `type`),
+    # so a source type missing from its list gets NO options transformed --
+    # and normalize_capture then has to invent a placeholder option.
+    OPTION_BEARING_SOURCE_TYPES = [
+        'select', 'radio_horizontal', 'radio_vertical',
+        'checklist_horizontal', 'checklist_vertical', 'label_select',
+    ]
+
+    @pytest.mark.parametrize('source_type', OPTION_BEARING_SOURCE_TYPES)
+    def test_option_bearing_source_types_get_their_options_transformed(self, source_type):
+        import ast
+        path = os.path.join(REPO_ROOT, 'pipefy/src/transformers/field_transformer.py')
+        with open(path) as handle:
+            tree = ast.parse(handle.read())
+
+        listed = set()
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.FunctionDef)
+                    and node.name == '_create_field_config'):
+                continue
+            for sub in ast.walk(node):
+                if isinstance(sub, ast.Compare) and isinstance(sub.ops[0], ast.In):
+                    try:
+                        listed |= set(ast.literal_eval(sub.comparators[0]))
+                    except (ValueError, TypeError):
+                        continue
+
+        assert source_type in listed, (
+            f'{source_type!r} carries options in Pipefy but is not in '
+            "_create_field_config's option-bearing list, so its options are "
+            'dropped and the field is created with a placeholder option'
+        )
+
     def test_assignee_and_file_types_survive(self):
         """The two that regressed. `user`/`users` -> assignees_form, `files` -> file."""
         assert normalize_capture({'label': 'X', 'type': 'user'})['field_type'] == 'assignees_form'
