@@ -42,17 +42,22 @@ class FieldTransformer:
         'id': "text",
 
         'text': "text",
+        'short_text': "text",
+        'long_text': "textarea",
         'textarea': "textarea",
         'currency': "text",
         'percentage': "text",
         'date': 'date',
         'datetime': 'datetime',
         'due_date': 'date',
-        "text": "text",
-        "text": "text",
         'select': 'select',
-        "radio": "radio",
-        "multiselect": 'multiselect',
+        'radio': "radio",
+        'radio_horizontal': "radio",
+        'radio_vertical': "radio",
+        'checkbox': 'multiselect',
+        'checklist': 'multiselect',
+        'checklist_horizontal': 'multiselect',
+        'checklist_vertical': 'multiselect',
         'multiselect': 'multiselect',
         'attachment': "file",
         'assignee_select': 'user',
@@ -373,7 +378,9 @@ class FieldTransformer:
         config = {}
         
         # Options for select fields
-        if field_type in ['select', "radio", "multiselect", 'multiselect', 'label_select']:
+        if field_type in ['select', 'radio', 'radio_horizontal', 'radio_vertical',
+                          'multiselect', 'checkbox', 'checklist',
+                          'checklist_horizontal', 'checklist_vertical', 'label_select']:
             config['options'] = self._transform_options(field.get('options', []))
             config['allow_other'] = field.get('allow_other_option', False)
         
