@@ -96,6 +96,15 @@ def _is_emptied_assignees(field: Dict[str, Any], raw_value: Any, encoded: Any) -
         return False
     if raw_value in (None, '', [], {}):
         return False
+    # `reshape_assignee_values` rewrites an empty source value into the shaped
+    # `{"users": [], "guests": [], "groups": []}`. That is a legitimately EMPTY
+    # field, not loss -- without this, an unselected member field (Process
+    # Street keeps `[]` form values) would raise under strict=True and block
+    # every other value on the run.
+    if isinstance(raw_value, dict) and not any(
+        raw_value.get(key) for key in ('users', 'guests', 'groups')
+    ):
+        return False
     if not isinstance(encoded, dict):
         return False
     return not any(encoded.get(key) for key in ('users', 'guests', 'groups'))
@@ -232,6 +241,18 @@ def reshape_assignee_values(
 
         users: List[Any] = []
         guests: List[str] = []
+        # Pipefy's CardField.assignee_values is typed `[[User]]` -- a list OF
+        # LISTS -- so the candidates can arrive one level deeper than expected.
+        # Flatten before unwrapping, or each inner list stringifies to a list
+        # repr that maps to nothing and the assignees are lost.
+        flattened: List[Any] = []
+        for candidate in candidates:
+            if isinstance(candidate, (list, tuple)):
+                flattened.extend(candidate)
+            else:
+                flattened.append(candidate)
+        candidates = flattened
+
         for candidate in candidates:
             # Source systems often return assignees as objects rather than bare
             # ids -- `{"id": 42, "email": ...}`. `str()` on one of those yields
@@ -277,6 +298,14 @@ def reshape_assignee_values(
                     'the user migration phase ran before instances.',
                     candidate,
                 )
+
+        if not users and not guests and candidates:
+            # There WERE candidates and none of them resolved. Leave the raw
+            # value in place rather than rewriting it to a shaped-but-empty
+            # dict: that dict is indistinguishable from a legitimately empty
+            # field, and rewriting it would launder real data loss into
+            # something the strict layer treats as fine.
+            continue
 
         raw_values[key] = {'users': users, 'guests': guests, 'groups': []}
 
@@ -374,7 +403,10 @@ def build_task_form_field_payloads(
         # None stores an empty field and returns 200: silent loss, and the
         # encoder's own log line claims it is "omitting" a value it was in fact
         # still passing through. Treat it as unresolved so strict mode raises.
-        if encoded is None and raw_value not in (None, '', [], {}):
+        # `[]` counts as unencodable too: a multiselect whose every entry failed
+        # option matching returns an empty list, which would otherwise be
+        # written and store the selections as empty with a 200.
+        if encoded in (None, []) and raw_value not in (None, '', [], {}):
             unresolved.append(source_key)
             logger.warning(
                 'Value %r for %r could not be encoded for field_type %r; it will '

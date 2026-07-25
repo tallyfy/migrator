@@ -303,6 +303,30 @@ class TestUnencodableValuesAreNeverWritten:
             {'id': 2, 'text': 'Billing', 'selected': True},
         ]
 
+    def test_a_multiselect_matching_no_options_is_not_written_empty(self):
+        """
+        `encode_field_value` returns `[]` when every entry fails option
+        matching. Writing that stores the selections as empty with a 200.
+        """
+        fields = [{'id': TL_TAGS, 'alias': 'tags', 'field_type': 'multiselect',
+                   'task_id': TASK_ONE,
+                   'options': [{'id': 1, 'text': 'Urgent'}]}]
+        with pytest.raises(UnresolvedFormFieldError):
+            build_task_form_field_payloads(
+                {'tags': ['Nope', 'Also nope']}, fields, strict=True
+            )
+
+        payloads = build_task_form_field_payloads(
+            {'tags': ['Nope']}, fields, strict=False
+        )
+        assert TL_TAGS not in payloads.get(TASK_ONE, {})
+
+    def test_an_empty_multiselect_is_still_written(self):
+        fields = [{'id': TL_TAGS, 'alias': 'tags', 'field_type': 'multiselect',
+                   'task_id': TASK_ONE, 'options': [{'id': 1, 'text': 'Urgent'}]}]
+        payloads = build_task_form_field_payloads({'tags': []}, fields, strict=True)
+        assert payloads[TASK_ONE][TL_TAGS] == []
+
     def test_a_legitimately_empty_value_is_still_written(self):
         """Empty is a real value; only unencodable non-empty input is withheld."""
         fields = [{'id': TL_NOTES, 'alias': 'notes', 'field_type': 'textarea',
@@ -338,9 +362,15 @@ class TestReshapeAssigneeValues:
         """
         values = {'owner': '12345'}
         reshape_assignee_values(values, self.fields(), user_id_mapper=lambda uid: None)
-        assert values['owner'] == {'users': [], 'guests': [], 'groups': []}, (
-            'an unmapped source id was coerced into a Tallyfy user id'
+
+        shaped = values['owner']
+        assert not (isinstance(shaped, dict) and shaped.get('users')), (
+            f'an unmapped source id was coerced into a Tallyfy user id: {shaped!r}'
         )
+        # It is also NOT rewritten to a shaped-but-empty dict, which would be
+        # indistinguishable from a legitimately empty field and would launder
+        # real loss past the strict layer.
+        assert shaped == '12345'
 
     def test_an_unmapped_id_then_raises_in_strict_mode(self):
         """The two halves compose: unmapped -> encodes to nobody -> reported."""
@@ -379,6 +409,32 @@ class TestReshapeAssigneeValues:
         reshape_assignee_values(values, self.fields(), user_id_mapper=lambda uid: None)
         assert values['owner'] == {
             'users': [], 'guests': ['outsider@example.com'], 'groups': [],
+        }
+
+    def test_pipefy_nested_assignee_values_are_flattened(self):
+        """
+        Pipefy's CardField.assignee_values is typed `[[User]]` -- a list OF
+        LISTS. Without flattening, each inner list stringifies to a list repr
+        that maps to nothing and every assignee is lost.
+        """
+        values = {'owner': [[{'id': '42', 'email': 'a@b.com', 'name': 'A'}]]}
+        reshape_assignee_values(
+            values, self.fields(),
+            user_id_mapper=lambda uid: 7 if uid == '42' else None,
+        )
+        assert values['owner'] == {'users': [7], 'guests': [], 'groups': []}
+
+    def test_an_empty_assignee_field_stays_a_legitimately_empty_value(self):
+        """
+        An unselected member field is empty, not lost. Process Street keeps `[]`
+        form values, so treating this as loss would raise under strict=True and
+        block every other value on the run.
+        """
+        values = {'owner': []}
+        reshape_assignee_values(values, self.fields(), user_id_mapper=lambda uid: None)
+        payloads = build_task_form_field_payloads(values, self.fields(), strict=True)
+        assert payloads[TASK_ONE][self.TL_OWNER] == {
+            'users': [], 'guests': [], 'groups': [],
         }
 
     def test_non_assignee_fields_are_untouched(self):
