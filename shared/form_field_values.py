@@ -223,6 +223,8 @@ def reshape_assignee_values(
         if isinstance(value, str):
             candidates = [v.strip() for v in value.split(',') if v.strip()]
         elif isinstance(value, (list, tuple)):
+            if not value:
+                continue
             candidates = list(value)
         elif value is None:
             raw_values[key] = {'users': [], 'guests': [], 'groups': []}
@@ -380,6 +382,24 @@ def build_task_form_field_payloads(
                 'Value %r for %r could not be encoded for field_type %r; it will '
                 'not be migrated rather than written as an empty value.',
                 raw_value, source_key, field.get('field_type') or field.get('type'),
+            )
+            continue
+
+        # multiselect: when every entry fails option matching the encoder returns
+        # [] instead of None, so the ``encoded is None`` guard above does not
+        # catch it.  An empty list written for a non-empty source is the same
+        # class of silent data loss.
+        field_type = field.get('field_type') or field.get('type')
+        if (
+            field_type == 'multiselect'
+            and isinstance(encoded, list) and not encoded
+            and raw_value not in (None, '', [], {})
+        ):
+            unresolved.append(source_key)
+            logger.warning(
+                'All multiselect entries for %r failed option matching; the '
+                'value will not be migrated rather than written as an empty list.',
+                source_key,
             )
             continue
 
