@@ -111,10 +111,29 @@ def _coerce_option_id(raw: Any, position: int) -> int:
     return position
 
 
+def _has_numeric_id(raw: Any) -> bool:
+    """Return True when the raw id resolves to an integer from the source value
+    rather than falling back to the positional index."""
+    if isinstance(raw, bool) or raw is None:
+        return False
+    if isinstance(raw, int):
+        return True
+    if isinstance(raw, str):
+        try:
+            int(raw.strip())
+            return True
+        except (TypeError, ValueError):
+            return False
+    return False
+
+
 def _normalize_options(raw_options: Any) -> List[Dict[str, Any]]:
     normalized: List[Dict[str, Any]] = []
     if not isinstance(raw_options, Iterable) or isinstance(raw_options, (str, bytes, dict)):
         return normalized
+
+    needs_generated_id: List[int] = []
+    taken_ids: set = set()
 
     for index, option in enumerate(raw_options, start=1):
         if isinstance(option, dict):
@@ -129,12 +148,28 @@ def _normalize_options(raw_options: Any) -> List[Dict[str, Any]]:
             continue
 
         entry: Dict[str, Any] = {
-            'id': _coerce_option_id(raw_id, index),
+            'id': 0,
             'text': str(text),
         }
         if isinstance(option, dict) and option.get('description'):
             entry['description'] = str(option['description'])
+
+        if _has_numeric_id(raw_id):
+            entry['id'] = _coerce_option_id(raw_id, index)
+            taken_ids.add(entry['id'])
+        else:
+            needs_generated_id.append(len(normalized))
+
         normalized.append(entry)
+
+    if needs_generated_id:
+        next_id = 1
+        for idx in needs_generated_id:
+            while next_id in taken_ids:
+                next_id += 1
+            normalized[idx]['id'] = next_id
+            taken_ids.add(next_id)
+            next_id += 1
 
     return normalized
 
