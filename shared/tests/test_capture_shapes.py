@@ -344,6 +344,79 @@ class TestAliasesCoverWhatTheTransformersActuallyEmit:
             'KNOWN_UNSUPPORTED with a reason.'
         )
 
+    # Pipefy's real Field.type identifiers, per
+    # https://developers.pipefy.com/reference/fields
+    PIPEFY_SOURCE_TYPES = [
+        'short_text', 'long_text', 'checklist_horizontal', 'checklist_vertical',
+        'radio_horizontal', 'radio_vertical', 'select', 'email', 'phone',
+        'number', 'date', 'datetime', 'due_date', 'attachment', 'label_select',
+        'assignee_select', 'connector', 'statement', 'cpf', 'cnpj', 'currency',
+        'id',
+    ]
+
+    def test_every_real_pipefy_source_type_is_mapped_not_defaulted(self):
+        """
+        `_map_field_type` falls back to "text" for anything not in the map, so a
+        MISSING key is silent: a Pipefy long_text became a 255-char text field
+        and checklists lost their multi-select shape. The map's keys must be
+        Pipefy's identifiers, not Tallyfy's.
+        """
+        import ast
+        path = os.path.join(REPO_ROOT, 'pipefy/src/transformers/field_transformer.py')
+        with open(path) as handle:
+            tree = ast.parse(handle.read())
+
+        mapping = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == 'FieldTransformer':
+                for stmt in node.body:
+                    targets = getattr(stmt, 'targets', [])
+                    if (isinstance(stmt, ast.Assign) and targets
+                            and isinstance(targets[0], ast.Name)
+                            and targets[0].id == 'FIELD_TYPE_MAPPING'):
+                        mapping = ast.literal_eval(stmt.value)
+        assert mapping is not None
+
+        missing = [t for t in self.PIPEFY_SOURCE_TYPES if t not in mapping]
+        assert not missing, (
+            f'Pipefy source types {missing} are not in FIELD_TYPE_MAPPING, so they '
+            'silently default to `text`'
+        )
+
+    @pytest.mark.parametrize('source,expected', [
+        ('long_text', 'textarea'),
+        ('checklist_vertical', 'multiselect'),
+        ('checklist_horizontal', 'multiselect'),
+        ('radio_vertical', 'radio'),
+        ('radio_horizontal', 'radio'),
+        ('email', 'email'),
+        ('label_select', 'dropdown'),
+        ('assignee_select', 'assignees_form'),
+        ('attachment', 'file'),
+    ])
+    def test_pipefy_types_survive_end_to_end(self, source, expected):
+        """Transformer map + capture_shapes aliases, composed."""
+        import ast
+        path = os.path.join(REPO_ROOT, 'pipefy/src/transformers/field_transformer.py')
+        with open(path) as handle:
+            tree = ast.parse(handle.read())
+        mapping = None
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == 'FieldTransformer':
+                for stmt in node.body:
+                    targets = getattr(stmt, 'targets', [])
+                    if (isinstance(stmt, ast.Assign) and targets
+                            and isinstance(targets[0], ast.Name)
+                            and targets[0].id == 'FIELD_TYPE_MAPPING'):
+                        mapping = ast.literal_eval(stmt.value)
+
+        emitted = mapping.get(source, 'text')
+        final = normalize_capture({'label': 'X', 'type': emitted})['field_type']
+        assert final == expected, (
+            f'Pipefy {source!r} -> transformer {emitted!r} -> Tallyfy {final!r}, '
+            f'expected {expected!r}'
+        )
+
     def test_assignee_and_file_types_survive(self):
         """The two that regressed. `user`/`users` -> assignees_form, `files` -> file."""
         assert normalize_capture({'label': 'X', 'type': 'user'})['field_type'] == 'assignees_form'

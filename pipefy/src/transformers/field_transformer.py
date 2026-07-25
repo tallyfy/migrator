@@ -18,10 +18,31 @@ class FieldTransformer:
     """Transform Pipefy fields to Tallyfy field fields"""
     
     # Field type mapping
+    # Keys are Pipefy's real `Field.type` identifiers, per
+    # https://developers.pipefy.com/reference/fields
+    #
+    # The `short_text`/`long_text`/`checklist_*`/`radio_*`/`email` entries were
+    # MISSING, and `_map_field_type` falls back to "text" for anything unknown,
+    # so a Pipefy long_text became a 255-char `text` (truncating at 6000-char
+    # content), checklists lost their multi-select shape, and radio/email fields
+    # became plain text. The `text`/`textarea`/`radio`/`multiselect` keys below
+    # are Tallyfy names rather than Pipefy ones and never matched anything; they
+    # are kept only so any caller already passing a Tallyfy type is unaffected.
     FIELD_TYPE_MAPPING = {
+        # Real Pipefy identifiers
+        'short_text': "text",
+        'long_text': "textarea",
+        'checklist_horizontal': 'multiselect',
+        'checklist_vertical': 'multiselect',
+        'radio_horizontal': 'radio',
+        'radio_vertical': 'radio',
+        'email': 'email',
+        'phone': "text",
+        'number': "text",
+        'id': "text",
+
         'text': "text",
         'textarea': "textarea",
-        "text": "text",
         'currency': "text",
         'percentage': "text",
         'date': 'date',
