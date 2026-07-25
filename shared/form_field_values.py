@@ -417,24 +417,6 @@ def build_task_form_field_payloads(
             )
             continue
 
-        # multiselect: when every entry fails option matching the encoder returns
-        # [] instead of None, so the ``encoded is None`` guard above does not
-        # catch it.  An empty list written for a non-empty source is the same
-        # class of silent data loss.
-        field_type = field.get('field_type') or field.get('type')
-        if (
-            field_type == 'multiselect'
-            and isinstance(encoded, list) and not encoded
-            and raw_value not in (None, '', [], {})
-        ):
-            unresolved.append(source_key)
-            logger.warning(
-                'All multiselect entries for %r failed option matching; the '
-                'value will not be migrated rather than written as an empty list.',
-                source_key,
-            )
-            continue
-
         # `assignees_form` resolves only email-shaped candidates (deliberately --
         # it mirrors the middleware). Source systems key assignee fields by user
         # ID or display name, so a non-empty source value can encode to an EMPTY
