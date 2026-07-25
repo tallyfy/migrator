@@ -53,7 +53,7 @@ rather than being logged and skipped.
 import logging
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from .prerun_encoder import PrerunEncodingError, encode_field_value, resolve_capture
+from .prerun_encoder import EMAIL_REGEX, PrerunEncodingError, encode_field_value, resolve_capture
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +165,101 @@ def resolve_form_field(
         if field is not None:
             return field
     return None
+
+
+def reshape_assignee_values(
+    raw_values: Dict[Any, Any],
+    form_fields: Sequence[Dict[str, Any]],
+    fallback_keys: Optional[Mapping[Any, Sequence[Any]]] = None,
+    user_id_mapper: Any = None,
+) -> None:
+    """
+    Pre-shape assignee field values so the encoder receives a dict it passes
+    through, rather than raw source-system user IDs that would be silently
+    dropped by :func:`~prerun_encoder.encode_assignees_form`.
+
+    Source systems (Process Street, Pipefy, etc.) store member/assignee field
+    values as user IDs.  The encoder only keeps email-shaped candidates and
+    drops everything else, so those IDs vanish without a trace -- the write
+    still succeeds and the migration reports success.
+
+    This function resolves each value against the target form fields and, for
+    any ``assignees_form`` field, maps the source IDs through
+    ``user_id_mapper`` and wraps them in the ``{"users": [...], "guests": [],
+    "groups": []}`` shape the encoder passes through unchanged.
+
+    Mutates *raw_values* in place.  Call it between fetching form fields and
+    calling :func:`build_task_form_field_payloads`.
+
+    Args:
+        raw_values: The mutable source-value dict that will later be fed to
+            ``build_task_form_field_payloads``.
+        form_fields: Live form fields from ``GET /runs/{id}/form-fields``.
+        fallback_keys: Same as ``build_task_form_field_payloads``.
+        user_id_mapper: ``callable(source_id) -> tallyfy_user_id | None``.
+            Typically ``lambda uid: id_mapper.get_tallyfy_id(str(uid), 'user')``.
+    """
+    if not form_fields or not raw_values:
+        return
+
+    fallbacks = fallback_keys or {}
+
+    for key in list(raw_values):
+        field = resolve_form_field(
+            form_fields, key, *(fallbacks.get(key) or ())
+        )
+        if field is None:
+            continue
+        field_type = field.get('field_type') or field.get('type')
+        if field_type != 'assignees_form':
+            continue
+
+        value = raw_values[key]
+        if isinstance(value, dict) and any(
+            k in value for k in ('users', 'guests', 'groups')
+        ):
+            continue
+
+        if isinstance(value, str):
+            candidates = [v.strip() for v in value.split(',') if v.strip()]
+        elif isinstance(value, (list, tuple)):
+            candidates = list(value)
+        elif value is None:
+            raw_values[key] = {'users': [], 'guests': [], 'groups': []}
+            continue
+        else:
+            candidates = [value]
+
+        users: List[Any] = []
+        guests: List[str] = []
+        for candidate in candidates:
+            cand_str = str(candidate).strip()
+            if not cand_str:
+                continue
+
+            if user_id_mapper is not None:
+                mapped = user_id_mapper(cand_str)
+                if mapped is not None:
+                    try:
+                        users.append(int(mapped))
+                    except (TypeError, ValueError):
+                        users.append(mapped)
+                    continue
+
+            if EMAIL_REGEX.match(cand_str):
+                if cand_str not in guests:
+                    guests.append(cand_str)
+            else:
+                try:
+                    users.append(int(cand_str))
+                except (TypeError, ValueError):
+                    logger.warning(
+                        'Assignee candidate %r could not be mapped to a '
+                        'Tallyfy user; skipping',
+                        candidate,
+                    )
+
+        raw_values[key] = {'users': users, 'guests': guests, 'groups': []}
 
 
 def build_task_form_field_payloads(
