@@ -363,7 +363,20 @@ def encode_field_value(
         if value in (None, ''):
             return value
         if isinstance(value, list):
-            return value
+            encoded_files = []
+            for item in value:
+                if isinstance(item, dict):
+                    encoded_files.append(item)
+                else:
+                    item_url = str(item)
+                    encoded_files.append({
+                        'filename': item_url.split('/')[-1],
+                        'source': 'url',
+                        'subject': file_subject or {},
+                        'uploaded_from': uploaded_from,
+                        'url': item_url,
+                    })
+            return encoded_files
         url = str(value)
         return [{
             'filename': url.split('/')[-1],

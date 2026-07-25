@@ -821,9 +821,11 @@ class PipefyMigrationOrchestrator:
         their list shape instead of collapsing to a string.
 
         Exceptions:
-        - Single-select types (``label_select``, ``select``, ``radio``) always
-          use the scalar ``value``; their ``array_value`` is a list that the
-          dropdown encoder cannot match against option text.
+        - Single-select types (``select``, ``radio``) always use the scalar
+          ``value``; their ``array_value`` is a list that the dropdown encoder
+          cannot match against option text.
+        - ``label_select`` uses ``array_value`` (where Pipefy stores it); the
+          encoder's single-element unwrap handles the one-item list.
         - ``assignee_select`` reads from ``assignee_values`` (a ``[User]``
           list), which carries structured ``{id, email, name}`` dicts that
           ``reshape_assignee_values`` can map through the user id mapper.
@@ -831,7 +833,7 @@ class PipefyMigrationOrchestrator:
         raw_values: Dict[str, Any] = {}
         labels: Dict[str, List[str]] = {}
 
-        _SCALAR_PIPEFY_TYPES = frozenset({'label_select', 'select', 'radio'})
+        _SCALAR_PIPEFY_TYPES = frozenset({'select', 'radio'})
 
         for field in card.get('fields', []) or []:
             definition = field.get('field') or {}
