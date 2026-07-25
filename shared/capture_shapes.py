@@ -40,7 +40,10 @@ nested under ``config.options`` as ``{value, label}``. Normalising here keeps
 that transformer untouched while still producing a payload the API accepts.
 """
 
+import logging
 from typing import Any, Dict, Iterable, List, Optional
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     'CAPTURE_FIELD_TYPES',
@@ -193,6 +196,15 @@ def normalize_capture(capture: Dict[str, Any], position: Optional[int] = None) -
     if isinstance(field_type, str):
         field_type = _FIELD_TYPE_ALIASES.get(field_type, field_type)
     if field_type not in CAPTURE_FIELD_TYPES:
+        # Tallyfy has no equivalent (Process Street's signature/location/rating/
+        # slider/time all land here). Falling back to `text` preserves the value,
+        # but doing it SILENTLY is how a downgrade goes unnoticed for months.
+        if field_type is not None:
+            logger.warning(
+                "Field type %r has no Tallyfy equivalent; field %r will be "
+                "migrated as `text` and its original type is lost.",
+                field_type, capture.get('label') or capture.get('name'),
+            )
         field_type = 'text'
     normalized['field_type'] = field_type
 

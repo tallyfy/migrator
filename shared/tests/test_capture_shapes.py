@@ -126,6 +126,32 @@ class TestNormalizeCapture:
         out = normalize_capture({'label': 'X', 'type': 'signature_pad'})
         assert out['field_type'] == 'text'
 
+    def test_downgrading_an_unsupported_type_is_logged_not_silent(self, caplog):
+        """
+        Process Street emits signature/location/rating/slider/time, none of which
+        Tallyfy has. Migrating them as text is correct; doing it silently is how
+        a downgrade goes unnoticed.
+        """
+        with caplog.at_level('WARNING'):
+            normalize_capture({'label': 'Sign here', 'type': 'signature'})
+
+        assert any('signature' in r.getMessage() for r in caplog.records), (
+            'an unsupported field type was downgraded to text without a warning'
+        )
+
+    def test_a_supported_type_does_not_warn(self, caplog):
+        with caplog.at_level('WARNING'):
+            normalize_capture({'label': 'Notes', 'type': 'textarea'})
+            normalize_capture({'label': 'Who', 'type': 'user'})
+            normalize_capture({'label': 'Docs', 'type': 'files'})
+        assert not caplog.records, f'unexpected warnings: {[r.message for r in caplog.records]}'
+
+    def test_a_field_with_no_type_at_all_does_not_warn(self, caplog):
+        with caplog.at_level('WARNING'):
+            out = normalize_capture({'label': 'X'})
+        assert out['field_type'] == 'text'
+        assert not caplog.records
+
     def test_every_declared_field_type_survives(self):
         for field_type in CAPTURE_FIELD_TYPES:
             out = normalize_capture({'label': 'X', 'field_type': field_type})
@@ -224,6 +250,97 @@ class TestNormalizeCapture:
         """
         with pytest.raises(TypeError):
             normalize_capture('Preferred plan')
+
+
+class TestAliasesCoverWhatTheTransformersActuallyEmit:
+    """
+    The alias table is only correct relative to the values the vendor
+    FieldTransformers really produce. `user` and `files` were missing from the
+    first version of this module and silently became `text`; this reads the
+    real FIELD_TYPE_MAPPING and fails if that regresses.
+    """
+
+    EMITTERS = [
+        ('pipefy', 'pipefy/src/transformers/field_transformer.py', 'FieldTransformer'),
+        ('process-street', 'process-street/src/transformers/form_transformer.py', 'FormTransformer'),
+    ]
+
+    # Types Tallyfy genuinely has no equivalent for. These SHOULD become text.
+    KNOWN_UNSUPPORTED = {'time', 'signature', 'location', 'rating', 'slider'}
+
+    def emitted_types(self, rel_path, class_name):
+        """
+        Read FIELD_TYPE_MAPPING statically. These modules use relative imports,
+        so importing one standalone fails; parsing sidesteps that and keeps the
+        test honest about what is literally in the source.
+        """
+        import ast
+
+        with open(os.path.join(REPO_ROOT, rel_path)) as handle:
+            tree = ast.parse(handle.read())
+
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.ClassDef) and node.name == class_name):
+                continue
+            for stmt in node.body:
+                targets = getattr(stmt, 'targets', [])
+                if (isinstance(stmt, ast.Assign) and targets
+                        and isinstance(targets[0], ast.Name)
+                        and targets[0].id == 'FIELD_TYPE_MAPPING'):
+                    mapping = ast.literal_eval(stmt.value)
+                    return set(mapping.values())
+
+        raise AssertionError(f'{class_name}.FIELD_TYPE_MAPPING not found in {rel_path}')
+
+    @pytest.mark.parametrize('vendor,rel_path,class_name', EMITTERS)
+    def test_every_emitted_type_maps_to_a_real_tallyfy_type(self, vendor, rel_path, class_name):
+        emitted = self.emitted_types(rel_path, class_name)
+
+        downgraded = {
+            source for source in emitted
+            if normalize_capture({'label': 'X', 'type': source})['field_type'] == 'text'
+            and source != 'text'
+        }
+
+        unexpected = downgraded - self.KNOWN_UNSUPPORTED
+        assert not unexpected, (
+            f'{vendor} emits {sorted(unexpected)}, which silently become `text`. '
+            'Add an alias in shared/capture_shapes.py or add them to '
+            'KNOWN_UNSUPPORTED with a reason.'
+        )
+
+    def test_assignee_and_file_types_survive(self):
+        """The two that regressed. `user`/`users` -> assignees_form, `files` -> file."""
+        assert normalize_capture({'label': 'X', 'type': 'user'})['field_type'] == 'assignees_form'
+        assert normalize_capture({'label': 'X', 'type': 'users'})['field_type'] == 'assignees_form'
+        assert normalize_capture({'label': 'X', 'type': 'files'})['field_type'] == 'file'
+
+
+class TestRequiredFlagSurvivesTheTransformers:
+    """
+    pipefy/field_transformer.py and process-street/form_transformer.py both emit
+    `is_required`, not `required`. Reading only `required` marked every migrated
+    field optional regardless of the source.
+    """
+
+    def test_is_required_is_honoured(self):
+        assert normalize_capture({'label': 'X', 'is_required': True})['required'] is True
+        assert normalize_capture({'label': 'X', 'is_required': False})['required'] is False
+
+    def test_required_wins_when_both_are_present(self):
+        out = normalize_capture({'label': 'X', 'required': True, 'is_required': False})
+        assert out['required'] is True
+
+    @pytest.mark.parametrize('rel_path', [
+        'pipefy/src/transformers/field_transformer.py',
+        'process-street/src/transformers/form_transformer.py',
+    ])
+    def test_the_transformers_really_do_emit_is_required(self, rel_path):
+        """Pins the premise. If a transformer switches key, this test tells you."""
+        with open(os.path.join(REPO_ROOT, rel_path)) as handle:
+            assert "'is_required'" in handle.read(), (
+                f'{rel_path} no longer emits is_required; revisit the fallback'
+            )
 
 
 class TestNormalizeCaptures:
