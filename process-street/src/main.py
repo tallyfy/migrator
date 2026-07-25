@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 from shared.form_field_values import (
     build_task_form_field_payloads,
     extract_run_form_fields,
+    reshape_assignee_values,
 )
 
 logger = logging.getLogger(__name__)
@@ -673,6 +674,12 @@ class MigrationOrchestrator:
 
         form_fields = extract_run_form_fields(
             self.tallyfy_client.get_run_form_fields(run_id)
+        )
+
+        reshape_assignee_values(
+            raw_values, form_fields,
+            fallback_keys=hints,
+            user_id_mapper=lambda uid: self.id_mapper.get_tallyfy_id(str(uid), 'user'),
         )
 
         payloads = build_task_form_field_payloads(

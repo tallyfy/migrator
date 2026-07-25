@@ -239,17 +239,27 @@ def encode_assignees_form(
     guests: List[str] = []
 
     for candidate in candidates:
-        email = str(candidate).strip()
-        if not email or not EMAIL_REGEX.match(email):
+        raw = str(candidate).strip()
+        if not raw:
             continue
 
-        match = next((m for m in members if m.get('email') == email), None)
-        if match:
-            member_id = match.get('id')
-            if not any(str(u) == str(member_id) for u in users):
-                users.append(member_id)
-        elif email not in guests:
-            guests.append(email)
+        if EMAIL_REGEX.match(raw):
+            match = next((m for m in members if m.get('email') == raw), None)
+            if match:
+                member_id = match.get('id')
+                if not any(str(u) == str(member_id) for u in users):
+                    users.append(member_id)
+            elif raw not in guests:
+                guests.append(raw)
+        else:
+            # Numeric candidates are Tallyfy user IDs (int) -- source-system
+            # IDs should have been mapped to ints upstream by the migrator.
+            try:
+                user_id = int(raw)
+                if not any(str(u) == str(user_id) for u in users):
+                    users.append(user_id)
+            except (TypeError, ValueError):
+                pass
 
     if guests and not users and current_user_id is not None:
         users.append(current_user_id)
