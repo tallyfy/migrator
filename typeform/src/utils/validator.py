@@ -71,11 +71,15 @@ class MigrationValidator:
         return self.validation_results
     
     def validate_user(self, tallyfy_id: str) -> bool:
-        """Validate a single user exists in Tallyfy"""
-        try:
-            return True
-        except Exception:
-            return False
+        """Validate a single user exists in Tallyfy.
+
+        NOT IMPLEMENTED -- returns True unconditionally, so a user that failed to
+        migrate still passes phase 5. This matches the placeholder every other
+        vendor's validator carries; there is no user read-back method on this
+        TallyfyClient to call yet (it exposes only validate_checklist and
+        validate_run). Do not read a passing user validation as evidence.
+        """
+        return True
     
     def validate_template(self, blueprint_id: str) -> bool:
         """Validate a single template exists in Tallyfy"""
