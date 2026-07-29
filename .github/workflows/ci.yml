@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The cheapest and highest-value gate. Every migrator is a standalone copy of the
+  # same skeleton, so a bad edit to one file class tends to exist in several vendors
+  # at once. `undefined name` is the specific error pyflakes reports for a name that
+  # is used but never bound -- the failure that made monday/ and typeform/ raise at
+  # import time, with nothing to catch it. It needs no vendor dependencies, so it
+  # covers all 17 vendors in seconds.
+  undefined-names:
+    name: undefined names (import-time crash guard)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: pip install pyflakes==3.4.0
+      - name: Fail on any undefined name
+        run: |
+          # pyflakes exits non-zero for style findings too (unused imports, f-strings
+          # without placeholders). Those are pre-existing and not worth blocking on,
+          # so gate strictly on the crash class only.
+          pyflakes $(git ls-files '*.py') > pyflakes.txt || true
+          if grep 'undefined name' pyflakes.txt; then
+            echo "::error::undefined name(s) found -- these raise at import time"
+            exit 1
+          fi
+          echo "No undefined names."
+
+  # Byte-compiles every file. Catches syntax errors in vendors that have no tests.
+  compile:
+    name: compileall
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m compileall -q .
+
+  # The real suite. shared/ is the only code every vendor depends on, so a break
+  # here breaks all 17.
+  shared-tests:
+    name: shared tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: pip install pytest requests
+      - run: python -m pytest shared/tests/ -q
+
+  # Proves each vendor's orchestrator can actually be imported with its declared
+  # dependencies installed. This is what would have caught monday/ and typeform/.
+  import-smoke:
+    name: import ${{ matrix.vendor }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        vendor:
+          - asana
+          - basecamp
+          - bpmn
+          - clickup
+          - cognito-forms
+          - google-forms
+          - jotform
+          - kissflow
+          - monday
+          - nextmatter
+          - pipefy
+          - process-street
+          - rocketlane
+          - surveymonkey
+          - trello
+          - typeform
+          - wrike
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: ${{ matrix.vendor }}/requirements.txt
+      - name: Install ${{ matrix.vendor }} requirements
+        working-directory: ${{ matrix.vendor }}
+        run: pip install -r requirements.txt
+      - name: import src.main
+        working-directory: ${{ matrix.vendor }}
+        run: python -c "import src.main"
+
+  # Per-vendor suites, for the vendors whose suites actually run green. Kept separate
+  # from shared-tests so one vendor's rot cannot mask a shared/ regression.
+  #
+  # Deliberately NOT the full list. asana/ and process-street/ construct an
+  # orchestrator class that does not exist (`VendorMigrationOrchestrator`,
+  # `ProcessStreetMigrationOrchestrator`) with an arity the real classes never had,
+  # and monday/ has 9 substantive failures that were invisible until its
+  # import-time crash was fixed. Add each vendor here as its suite is repaired --
+  # a permanently-red job teaches everyone to ignore CI.
+  vendor-tests:
+    name: tests ${{ matrix.vendor }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        vendor: [kissflow]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: ${{ matrix.vendor }}/requirements.txt
+      - name: Install ${{ matrix.vendor }} requirements
+        working-directory: ${{ matrix.vendor }}
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+      - name: pytest
+        working-directory: ${{ matrix.vendor }}
+        run: python -m pytest tests/ -q

@@ -23,7 +23,7 @@ from src.transformers.template_transformer import TemplateTransformer
 from src.transformers.instance_transformer import InstanceTransformer
 from src.transformers.user_transformer import UserTransformer
 from src.utils.checkpoint_manager import CheckpointManager
-from src.utils.validator import Validator
+from src.utils.validator import MigrationValidator
 from src.utils.error_handler import ErrorHandler
 from src.utils.logger_config import setup_logger
 
@@ -71,7 +71,7 @@ class TypeformMigrator:
         
         # Initialize utilities
         self.checkpoint = CheckpointManager(config.get('checkpoint_file', 'typeform_migration.db'))
-        self.validator = Validator(self.typeform, self.tallyfy)
+        self.validator = MigrationValidator(self.typeform, self.tallyfy)
         self.error_handler = ErrorHandler()
         
         # Migration state

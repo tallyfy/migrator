@@ -3,7 +3,7 @@
 import json
 import os
 import logging
-from typing import Dict, Any, Optional, Set
+from typing import Dict, Any, List, Optional, Set
 from datetime import datetime
 from pathlib import Path
 
@@ -367,6 +367,3 @@ class CheckpointManager:
         except Exception as e:
             logger.error(f"Checkpoint validation failed: {e}")
             return False
-
-
-from typing import List

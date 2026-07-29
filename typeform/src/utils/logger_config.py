@@ -78,10 +78,30 @@ def setup_logging(log_level: str = None, log_file: str = None):
     
     # Log initial setup
     root_logger.info("=" * 60)
-    root_logger.info(f"RocketLane to Tallyfy Migration Started")
+    root_logger.info("Typeform to Tallyfy Migration Started")
     root_logger.info(f"Log Level: {log_level}")
     root_logger.info(f"Log File: {log_file}")
     root_logger.info("=" * 60)
+
+
+def setup_logger(name: str) -> logging.Logger:
+    """
+    Get a logger instance with the given name.
+    Sets up logging on first call.
+
+    Args:
+        name: Logger name (typically __name__)
+
+    Returns:
+        Logger instance
+    """
+    logger = logging.getLogger(name)
+
+    # If root logger has no handlers, set up logging
+    if not logging.getLogger().handlers:
+        setup_logging()
+
+    return logger
 
 
 def configure_module_loggers():

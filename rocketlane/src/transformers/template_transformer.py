@@ -297,7 +297,11 @@ class TemplateTransformer:
         kickoff_form = None
         step_forms = []
         
-        for form in forms:
+        # `idx` is the position fallback for a form the source left unpositioned.
+        # A literal default (this used to be 999) puts every unpositioned form in the
+        # same slot, and api-v2's set_*_index functions are non-deterministic on
+        # position ties -- so the steps come out in an arbitrary order. See #1.
+        for idx, form in enumerate(forms):
             form_type = form.get('type', 'general')
             field_count = len(form.get('fields', []))
             
@@ -322,7 +326,7 @@ class TemplateTransformer:
                 step_forms.append({
                     'name': form.get('name', 'Feedback Form'),
                     'type': 'approval',
-                    'position': form.get('position', 999),
+                    'position': form.get('position', idx),
                     'fields': self.field_transformer.transform_fields_batch(form['fields'])
                 })
             
@@ -331,7 +335,7 @@ class TemplateTransformer:
                 step_forms.append({
                     'name': form.get('name', 'Form'),
                     'type': 'form',
-                    'position': form.get('position', 999),
+                    'position': form.get('position', idx),
                     'fields': self.field_transformer.transform_fields_batch(form['fields'])
                 })
         
