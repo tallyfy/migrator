@@ -3,6 +3,8 @@ Tallyfy API Client
 Handles all interactions with Tallyfy API for data import
 """
 
+import os
+import sys
 import requests
 import time
 import json
@@ -12,6 +14,15 @@ from typing import Dict, List, Optional, Any, Tuple
 from urllib.parse import urljoin
 from datetime import datetime, timedelta
 import backoff
+
+# The repo root holds the shared package. This module is imported both via
+# `main.py` (which bootstraps the path itself) and directly by tests, so it
+# cannot rely on a caller having done it.
+sys.path.insert(
+    0,
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+)
+from shared.capture_shapes import normalize_capture, normalize_captures
 
 logger = logging.getLogger(__name__)
 
@@ -463,45 +474,157 @@ class TallyfyClient:
         return self.update_step_instance(run_id, step_id, data)
     
     # Form/field Methods
-    def create_capture(self, entity_type: str, entity_id: str, capture_data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_step_capture(
+        self,
+        checklist_id: str,
+        step_id: str,
+        capture_data: Dict[str, Any],
+        position: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """
-        Create a field (form field) for an entity
-        
+        Create a form field on a template step.
+
+        Endpoint: ``POST /organizations/{org}/checklists/{checklist_id}/steps/{step_id}/captures``
+
+        This route is registered in api-v2 as
+        ``Route::resource('captures', StepCapturesController::class)->only(['store', ...])``
+        nested under ``checklists/{checklist_id}/steps/{step_id}`` -- so it needs
+        BOTH ids. A bare ``/steps/{step_id}/captures`` is not served and 404s.
+
+        The body is normalised by :func:`shared.capture_shapes.normalize_capture`
+        into the shape ``CreateCaptureRequest`` validates.
+
         Args:
-            entity_type: Type of entity (checklist, step, process)
-            entity_id: Entity ID
-            capture_data: field field configuration
-            
+            checklist_id: Template ID the step belongs to.
+            step_id: Step ID to attach the field to.
+            capture_data: Field definition (``FieldTransformer`` output is fine).
+            position: Optional 1-based position.
+
         Returns:
-            Created field object
+            The created capture.
         """
-        if 'id' not in capture_data:
-            capture_data['id'] = self._generate_hash_id('cap')
-        
-        endpoint = f'/{entity_type}s/{entity_id}/field'
-        result = self._make_request('POST', endpoint, json=capture_data)
-        
-        self.stats['data_imported'].setdefault('field', 0)
-        self.stats['data_imported']['field'] += 1
-        
+        if not checklist_id:
+            raise ValueError('checklist_id is required to create a step form field')
+        if not step_id:
+            raise ValueError('step_id is required to create a step form field')
+
+        payload = normalize_capture(capture_data, position=position)
+
+        result = self._make_request(
+            'POST',
+            f'/checklists/{checklist_id}/steps/{step_id}/captures',
+            json=payload,
+        )
+
+        self.stats['data_imported'].setdefault('captures', 0)
+        self.stats['data_imported']['captures'] += 1
+
         return result
-    
-    def set_capture_value(self, run_id: str, capture_id: str, value: Any) -> Dict[str, Any]:
+
+    @staticmethod
+    def build_prerun_fields(captures: Any) -> List[Dict[str, Any]]:
         """
-        Set a field field value in a process
-        
+        Normalise kick-off fields for a checklist's ``prerun`` array.
+
+        api-v2 serves no ``preruns`` store route: kick-off fields are sent as a
+        ``prerun`` array on the checklist itself, accepted by
+        ``POST /organizations/{org}/checklists`` and
+        ``PUT /organizations/{org}/checklists/{id}``. Each entry obeys the same
+        capture rules as a step field.
+        """
+        return normalize_captures(captures)
+
+    def get_run_form_fields(self, run_id: str) -> Dict[str, Any]:
+        """
+        Read every form field on a process, with the ids needed to write to it.
+
+        Endpoint: ``GET /organizations/{org}/runs/{run_id}/form-fields``
+
+        Each returned field carries ``id`` (which IS the ``timeline_id``),
+        ``field_type``, ``options``, ``columns`` and ``task_id`` -- everything
+        ``update_task_form_field_values`` needs. Kick-off fields come back under
+        ``ko_form_fields``, step fields under ``form_fields``.
+
         Args:
             run_id: Process ID
-            capture_id: field field ID
-            value: Field value
-            
+
         Returns:
-            Updated field value
+            The API response.
         """
-        data = {'value': value}
-        return self._make_request('PUT', f'/runs/{run_id}/field/{capture_id}/value', 
-                                 json=data)
-    
+        return self._make_request('GET', f'/runs/{run_id}/form-fields')
+
+    def update_task_form_field_values(self, run_id: str, task_id: str,
+                                      taskdata: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Write form-field values onto one task of a process.
+
+        Endpoint: ``PUT /organizations/{org}/runs/{run_id}/tasks/{task_id}``
+        Body:     ``{"taskdata": {"<timeline_id>": <typed value>, ...}}``
+
+        This is the canonical bulk writer (``Task::setTaskdataAttribute`` ->
+        ``Task::updateCaptureValues``). It keys strictly by the field's
+        ``timeline_id``; any other key is ignored and the write still returns
+        200, so the value is lost without an error.
+
+        Args:
+            run_id: Process ID
+            task_id: Task ID, as given by the field's ``task_id``
+            taskdata: ``{timeline_id: encoded value}``. Encode with
+                ``shared.prerun_encoder.encode_field_value`` -- stringifying
+                breaks dropdown, multi-select, table and assignee fields.
+
+        Returns:
+            The API response.
+        """
+        if not taskdata:
+            raise ValueError('taskdata is empty: nothing to write.')
+
+        return self._make_request(
+            'PUT', f'/runs/{run_id}/tasks/{task_id}', json={'taskdata': taskdata}
+        )
+
+
+    def set_form_field_value(self, form_field_value_id: str, value: Any) -> Dict[str, Any]:
+        """
+        Set ONE form-field value on an existing process.
+
+        Endpoint: ``PUT /organizations/{org}/form-field/value``
+        Body:     ``{"id": <capture-value id>, "form_value": <typed value>}``
+
+        Args:
+            form_field_value_id: The id of the CAPTURE VALUE row, which is what
+                the API resolves (``CaptureValue::find($data['id'])``). It is
+                NOT a capture/field definition id and NOT a ``timeline_id``;
+                sending either of those returns an error, not a silent no-op.
+            value: The value, already encoded for the field's type. Use
+                ``shared.prerun_encoder.encode_field_value`` -- a stringified
+                value breaks dropdown, multi-select, table and assignee fields,
+                and a multi-select entry without ``"selected": true`` stores but
+                renders empty wherever the field is used as a ``{{variable}}``.
+
+        Returns:
+            The API response.
+
+        Note:
+            Capture-value ids are not discoverable through the API, so a
+            migration cannot normally reach this endpoint. To write values onto
+            a migrated process, read the fields from
+            ``GET /runs/{run_id}/form-fields`` and write them per task with
+            ``update_task_form_field_values`` -- that path keys by
+            ``timeline_id``, which the response does expose.
+        """
+        if not form_field_value_id:
+            raise ValueError(
+                'form_field_value_id is required: the API resolves the capture '
+                'value by id and cannot infer it.'
+            )
+
+        return self._make_request(
+            'PUT',
+            '/form-field/value',
+            json={'id': form_field_value_id, 'form_value': value},
+        )
+
     # Comment Methods
     def create_comment(self, entity_type: str, entity_id: str, comment_data: Dict[str, Any]) -> Dict[str, Any]:
         """

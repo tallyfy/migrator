@@ -362,3 +362,165 @@ class TestKissflowClientResolvesPrerun:
         client = self.build_client([])
         with pytest.raises(NoKickoffFieldsDefined):
             client.create_process('chk_1', 'Run 1', {'Company Name': 'Acme Corp'})
+
+
+class TestProcessStreetLaunchCarriesKickoffValues:
+    """A kick-off value is only settable in the LAUNCH body.
+
+    Kick-off fields were being created on the template but never populated at
+    launch, so an OPTIONAL kick-off value was silently lost and a REQUIRED one
+    422'd the launch, taking the whole run with it. The step-field (`taskdata`)
+    path cannot substitute: those values belong to a task, and a kick-off field
+    has none.
+    """
+
+    CAPTURES = [
+        {"id": "a" * 32, "field_type": "text", "label": "Client Name",
+         "alias": "client-name", "required": True},
+        {"id": "b" * 32, "field_type": "dropdown", "label": "Tier",
+         "alias": "tier", "required": False,
+         "options": [{"id": 1, "text": "Gold"}, {"id": 2, "text": "Silver"}]},
+    ]
+
+    def _migrator(self, captures):
+        """A migrator stub with only the collaborators _split_kickoff_values touches."""
+        import sys, types, os
+        sys.path.insert(0, os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__)))), "process-street", "src"))
+
+        class _Cache:
+            def __init__(self, caps): self._caps = caps
+            def get(self, checklist_id): return self._caps
+
+        class _IDMapper:
+            def get_tallyfy_id(self, source_id, kind): return None
+
+        from shared.kickoff_fields import KickoffFieldCache  # noqa: F401
+        obj = types.SimpleNamespace()
+        obj.kickoff_cache = _Cache(captures)
+        obj.id_mapper = _IDMapper()
+        return obj
+
+    def _split(self, migrator, ps_run, checklist_id="chk"):
+        """Bind the real method onto the stub - no vendor package import needed."""
+        import importlib.util, os
+        path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "process-street", "src", "main.py")
+        src = open(path).read()
+        # Pull just the method body out and exec it, so this test does not need
+        # the whole vendor package (and its API clients) importable.
+        start = src.index("    def _split_kickoff_values")
+        end = src.index("    def _migrate_form_values")
+        ns = {}
+        header = (
+            "from typing import Any, Dict, Optional, Tuple\n"
+            "import logging\n"
+            "logger = logging.getLogger('t')\n"
+            "from shared.prerun_encoder import build_prerun_payload, resolve_capture\n"
+            "from shared.form_field_values import reshape_assignee_values\n"
+            "class M:\n"
+        )
+        exec(header + src[start:end], ns)
+        return ns["M"]._split_kickoff_values(migrator, ps_run, checklist_id)
+
+    def test_kickoff_values_go_to_prerun_not_taskdata(self):
+        m = self._migrator(self.CAPTURES)
+        prerun, task_values = self._split(
+            m, {"id": "r1", "formValues": {"client-name": "Acme", "tier": "Gold"}})
+
+        assert prerun == {"a" * 32: "Acme", "b" * 32: {"id": 1, "text": "Gold"}}, (
+            "kick-off values must be keyed by timeline_id and typed per field")
+        assert task_values == {}, "nothing kick-off may be left on the task path"
+
+    def test_step_field_values_stay_on_the_task_path(self):
+        m = self._migrator(self.CAPTURES)
+        prerun, task_values = self._split(
+            m, {"id": "r1", "formValues": {"client-name": "Acme",
+                                           "some-step-field": "x"}})
+        assert prerun == {"a" * 32: "Acme"}
+        assert task_values == {"some-step-field": "x"}
+
+    def test_template_without_kickoff_fields_changes_nothing(self):
+        m = self._migrator([])
+        values = {"some-step-field": "x"}
+        prerun, task_values = self._split(m, {"id": "r1", "formValues": values})
+        assert prerun == {}
+        assert task_values == values
+
+    def test_unreadable_definitions_leave_every_value_on_the_task_path(self):
+        """Guessing a prerun key is worse than not sending one: the API discards
+        unrecognised keys and still returns 201, so a guess is silent loss."""
+        class _Boom:
+            def get(self, checklist_id): raise RuntimeError("403")
+        m = self._migrator(self.CAPTURES)
+        m.kickoff_cache = _Boom()
+        values = {"client-name": "Acme"}
+        prerun, task_values = self._split(m, {"id": "r1", "formValues": values})
+        assert prerun == {}
+        assert task_values == values
+
+
+class TestPipefyLaunchCarriesKickoffValues:
+    """Identical gap to process-street: the template gets kick-off fields, the
+    launch never populates them. Same consequence, same fix."""
+
+    CAPTURES = [
+        {"id": "c" * 32, "field_type": "text", "label": "Client", "alias": "client"},
+        {"id": "d" * 32, "field_type": "radio", "label": "Priority", "alias": "priority",
+         "options": [{"id": 1, "text": "High"}, {"id": 2, "text": "Low"}]},
+    ]
+
+    def _split(self, captures, raw_values, checklist_id="chk", boom=False):
+        import types, os, logging
+        path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "pipefy", "src", "main.py")
+        src = open(path).read()
+        start = src.index("    def _split_kickoff_values")
+        end = src.index("    def _migrate_card_fields")
+        ns = {}
+        exec(
+            "from typing import Any, Dict, Optional, Tuple\n"
+            "import logging\n"
+            "logger = logging.getLogger('t')\n"
+            "from shared.prerun_encoder import build_prerun_payload, resolve_capture\n"
+            "from shared.form_field_values import reshape_assignee_values\n"
+            "class M:\n" + src[start:end], ns)
+
+        class _Cache:
+            def get(self, cid):
+                if boom:
+                    raise RuntimeError("403")
+                return captures
+
+        class _IDMapper:
+            def get_tallyfy_id(self, source_id, kind): return None
+
+        obj = types.SimpleNamespace()
+        obj.kickoff_cache = _Cache()
+        obj.id_mapper = _IDMapper()
+        obj._collect_card_field_values = lambda card: (dict(raw_values), {})
+        return ns["M"]._split_kickoff_values(obj, {"id": "card1"}, checklist_id)
+
+    def test_kickoff_values_go_to_prerun(self):
+        prerun, task_values = self._split(
+            self.CAPTURES, {"client": "Acme", "priority": "High"})
+        # radio is the bare TEXT, deliberately unlike dropdown's object.
+        assert prerun == {"c" * 32: "Acme", "d" * 32: "High"}
+        assert task_values == {}
+
+    def test_step_field_values_stay_on_the_task_path(self):
+        prerun, task_values = self._split(
+            self.CAPTURES, {"client": "Acme", "step-only": "x"})
+        assert prerun == {"c" * 32: "Acme"}
+        assert task_values == {"step-only": "x"}
+
+    def test_no_kickoff_fields_changes_nothing(self):
+        values = {"step-only": "x"}
+        assert self._split([], values) == ({}, values)
+
+    def test_unreadable_definitions_send_no_prerun(self):
+        values = {"client": "Acme"}
+        assert self._split(self.CAPTURES, values, boom=True) == ({}, values)

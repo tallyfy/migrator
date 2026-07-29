@@ -18,20 +18,46 @@ class FieldTransformer:
     """Transform Pipefy fields to Tallyfy field fields"""
     
     # Field type mapping
+    # Keys are Pipefy's real `Field.type` identifiers, per
+    # https://developers.pipefy.com/reference/fields
+    #
+    # The `short_text`/`long_text`/`checklist_*`/`radio_*`/`email` entries were
+    # MISSING, and `_map_field_type` falls back to "text" for anything unknown,
+    # so a Pipefy long_text became a 255-char `text` (truncating at 6000-char
+    # content), checklists lost their multi-select shape, and radio/email fields
+    # became plain text. The `text`/`textarea`/`radio`/`multiselect` keys below
+    # are Tallyfy names rather than Pipefy ones and never matched anything; they
+    # are kept only so any caller already passing a Tallyfy type is unaffected.
     FIELD_TYPE_MAPPING = {
+        # Real Pipefy identifiers
+        'short_text': "text",
+        'long_text': "textarea",
+        'checklist_horizontal': 'multiselect',
+        'checklist_vertical': 'multiselect',
+        'radio_horizontal': 'radio',
+        'radio_vertical': 'radio',
+        'email': 'email',
+        'phone': "text",
+        'number': "text",
+        'id': "text",
+
         'text': "text",
+        'short_text': "text",
+        'long_text': "textarea",
         'textarea': "textarea",
-        "text": "text",
         'currency': "text",
         'percentage': "text",
         'date': 'date',
         'datetime': 'datetime',
         'due_date': 'date',
-        "text": "text",
-        "text": "text",
         'select': 'select',
-        "radio": "radio",
-        "multiselect": 'multiselect',
+        'radio': "radio",
+        'radio_horizontal': "radio",
+        'radio_vertical': "radio",
+        'checkbox': 'multiselect',
+        'checklist': 'multiselect',
+        'checklist_horizontal': 'multiselect',
+        'checklist_vertical': 'multiselect',
         'multiselect': 'multiselect',
         'attachment': "file",
         'assignee_select': 'user',
@@ -352,7 +378,9 @@ class FieldTransformer:
         config = {}
         
         # Options for select fields
-        if field_type in ['select', "radio", "multiselect", 'multiselect', 'label_select']:
+        if field_type in ['select', 'radio', 'radio_horizontal', 'radio_vertical',
+                          'multiselect', 'checkbox', 'checklist',
+                          'checklist_horizontal', 'checklist_vertical', 'label_select']:
             config['options'] = self._transform_options(field.get('options', []))
             config['allow_other'] = field.get('allow_other_option', False)
         

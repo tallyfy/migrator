@@ -22,13 +22,24 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from api.pipefy_client import PipefyClient
 from api.tallyfy_client import TallyfyClient
-from transformers.phase_transformer import PhaseTransformer
+from transformers.phase_transformer import PhaseToStepTransformer
 from transformers.field_transformer import FieldTransformer
 from utils.id_mapper import IDMapper
 from utils.progress_tracker import ProgressTracker
 from utils.validator import MigrationValidator
 from utils.logger_config import setup_logging
 from utils.database_migrator import DatabaseMigrator
+
+# The repo root holds the shared package; the sys.path line above only adds the
+# pipefy vendor root, so `import shared` would fail without this.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from shared.form_field_values import (
+    build_task_form_field_payloads,
+    extract_run_form_fields,
+    reshape_assignee_values,
+)
+from shared.kickoff_fields import KickoffFieldCache
+from shared.prerun_encoder import build_prerun_payload, resolve_capture
 
 logger = logging.getLogger(__name__)
 
@@ -106,9 +117,13 @@ class PipefyMigrationOrchestrator:
         # Initialize ID mapper
         mapping_db_path = self.config['storage']['mapping_database']['path']
         self.id_mapper = IDMapper(mapping_db_path)
+
+        # Kick-off field definitions, read once per template. Needed to resolve
+        # a card's values to timeline_ids before launch -- see _split_kickoff_values.
+        self.kickoff_cache = KickoffFieldCache(self.tallyfy_client)
         
         # Initialize transformers
-        self.phase_transformer = PhaseTransformer(self.id_mapper)
+        self.phase_transformer = PhaseToStepTransformer(self.id_mapper)
         self.field_transformer = FieldTransformer(self.id_mapper)
         
         # Initialize progress tracker
@@ -407,28 +422,92 @@ class PipefyMigrationOrchestrator:
                 # Transform pipe to checklist
                 checklist_data = self._transform_pipe_to_checklist(full_pipe)
                 
+                # `transform_pipe_to_checklist` returns the checklist itself --
+                # there is no 'multiselect' wrapper key and no 'step_groups'.
+                # Steps are a FLAT list, each carrying its phase under
+                # config.phase_metadata and its own fields under 'field'.
+                steps = checklist_data.pop('steps', [])
+                template_captures = checklist_data.pop('field', [])
+
+                # The pipe's start form becomes the template's kick-off fields.
+                # api-v2 serves no `preruns` store route: kick-off fields ride a
+                # `prerun` array on the checklist create payload itself
+                # (CreateChecklistRequest calls addCapturesRules($rules,
+                # 'prerun')), so they must be attached BEFORE the template is
+                # created.
+                #
+                # NOTE: `_transform_start_form_fields` is broken upstream -- it
+                # shadows its accumulator with the loop variable and calls
+                # .append() on a dict, so it returns a dict (or []) rather than a
+                # list of fields. Guard the shape here so a malformed value
+                # cannot feed bare strings into the normaliser; repairing that
+                # transformer needs Pipefy start-form ground truth and is
+                # separate work.
+                if not isinstance(template_captures, list):
+                    logger.error(
+                        "Start-form fields for pipe %s came back as %s, not a list; "
+                        "skipping them. _transform_start_form_fields is returning a "
+                        "malformed value and every kick-off field is being dropped.",
+                        pipe['id'], type(template_captures).__name__,
+                    )
+                    template_captures = []
+
+                if template_captures:
+                    checklist_data['prerun'] = self.tallyfy_client.build_prerun_fields(
+                        template_captures
+                    )
+
                 # Create checklist in Tallyfy
-                created_checklist = self.tallyfy_client.create_checklist(checklist_data['multiselect'])
+                created_checklist = self.tallyfy_client.create_checklist(checklist_data)
                 checklist_id = created_checklist['id']
-                
+
                 # Map pipe ID
                 self.id_mapper.add_mapping(pipe['id'], checklist_id, 'multiselect')
-                
+
                 # Create steps (transformed from phases)
-                for step_group in checklist_data['step_groups']:
-                    for step in step_group['steps']:
-                        created_step = self.tallyfy_client.create_step(checklist_id, step)
-                        
-                        # Map phase to step group
-                        if 'phase_id' in step_group:
-                            self.id_mapper.add_mapping(step_group['phase_id'], created_step['id'], 'step_group')
-                
-                # Create field (transformed from fields)
-                for field in checklist_data.get('field', []):
-                    self.tallyfy_client.create_capture('multiselect', checklist_id, field)
-                
+                for step in steps:
+                    step_captures = step.pop('field', [])
+                    created_step = self.tallyfy_client.create_step(checklist_id, step)
+
+                    ext_ref = step.get('external_ref')
+                    if ext_ref:
+                        self.id_mapper.add_mapping(ext_ref, created_step['id'], 'step')
+
+                    # Map the source phase to the step it became. This mapping is
+                    # CONSUMED by _validate_phase_transformation (main.py) and by
+                    # utils/validator.py, both of which read get_all_mappings(
+                    # 'step_group') -- dropping it makes phase validation report
+                    # zero phases migrated.
+                    phase_id = (step.get('config', {})
+                                    .get('phase_metadata', {})
+                                    .get('phase_id'))
+                    if phase_id:
+                        self.id_mapper.add_mapping(phase_id, created_step['id'], 'step_group')
+
+                    # The phase's own fields become the step's captures. They are
+                    # what GET /runs/{run}/form-fields later returns, so card
+                    # values have nothing to resolve against without them.
+                    #
+                    # The route is nested under BOTH ids --
+                    # POST /checklists/{checklist_id}/steps/{step_id}/captures --
+                    # and the body is normalised into the shape
+                    # CreateCaptureRequest validates. A failure here is fatal to
+                    # the pipe rather than a warning: a step whose fields are
+                    # missing silently loses every card value written to it.
+                    for position, capture in enumerate(step_captures, start=1):
+                        created_capture = self.tallyfy_client.create_step_capture(
+                            checklist_id, created_step['id'], capture, position=position,
+                        )
+                        source_field_id = capture.get('external_ref')
+                        if source_field_id and isinstance(created_capture, dict):
+                            live_id = created_capture.get('id')
+                            if live_id:
+                                self.id_mapper.add_mapping(
+                                    source_field_id, str(live_id), 'field'
+                                )
+
                 successful += 1
-                logger.debug(f"Created checklist: {checklist_data['multiselect'].get('title')}")
+                logger.debug(f"Created checklist: {checklist_data.get('title')}")
                 
             except Exception as e:
                 logger.error(f"Failed to migrate pipe {pipe.get('name', 'unknown')}: {e}")
@@ -478,7 +557,16 @@ class PipefyMigrationOrchestrator:
                 try:
                     # Transform card to process
                     process_data = self._transform_card_to_process(card, checklist_id)
-                    
+
+                    # Kick-off values have to ride the LAUNCH request. They live
+                    # on the run rather than on any task, so the post-launch
+                    # taskdata path cannot reach them -- and a REQUIRED kick-off
+                    # field fails the launch outright with a 422, losing the
+                    # whole card rather than one value.
+                    prerun, task_values = self._split_kickoff_values(card, checklist_id)
+                    if prerun:
+                        process_data['prerun'] = prerun
+
                     # Create process in Tallyfy
                     created_process = self.tallyfy_client.create_process(process_data)
                     run_id = created_process['id']
@@ -487,7 +575,10 @@ class PipefyMigrationOrchestrator:
                     self.id_mapper.add_mapping(card['id'], run_id, 'process')
                     
                     # Migrate field values
-                    self._migrate_card_fields(card, run_id)
+                    # Values already sent as `prerun` are excluded: they have
+                    # no task to belong to, so the strict resolver would raise
+                    # on values that in fact migrated correctly.
+                    self._migrate_card_fields(card, run_id, only_values=task_values)
                     
                     # Migrate comments
                     if card.get('comments'):
@@ -681,7 +772,7 @@ class PipefyMigrationOrchestrator:
     def _transform_pipe_to_checklist(self, pipe: Dict[str, Any]) -> Dict[str, Any]:
         """Transform Pipefy pipe to Tallyfy checklist"""
         # Use phase transformer
-        return self.phase_transformer.transform_pipe(pipe)
+        return self.phase_transformer.transform_pipe_to_checklist(pipe)
     
     def _transform_card_to_process(self, card: Dict[str, Any], checklist_id: str) -> Dict[str, Any]:
         """Transform Pipefy card to Tallyfy process"""
@@ -698,28 +789,185 @@ class PipefyMigrationOrchestrator:
             'labels': [l.get('name') for l in card.get('labels', [])]
         }
     
-    def _migrate_card_fields(self, card: Dict[str, Any], run_id: str):
-        """Migrate card field values to process"""
-        for field in card.get('fields', []):
-            try:
-                # Transform field value
-                transformed = self.field_transformer.transform_field_value(field)
-                
-                if transformed:
-                    capture_id = self.id_mapper.get_tallyfy_id(
-                        field.get('field', {}).get('id'), 
-                        "field"
-                    )
-                    
-                    if capture_id:
-                        self.tallyfy_client.set_capture_value(
-                            run_id, 
-                            capture_id, 
-                            transformed['value']
-                        )
-            except Exception as e:
-                logger.warning(f"Failed to migrate field value: {e}")
-    
+    def _split_kickoff_values(self, card: Dict[str, Any],
+                             checklist_id: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """
+        Split a card's field values into kick-off values and step-field values.
+
+        The two halves travel by completely different routes. Kick-off values
+        belong to the run and are only settable in the LAUNCH body, as
+        ``prerun`` keyed by each field's ``timeline_id``; step-field values
+        belong to a task and are written afterwards through ``taskdata``.
+        Sending a kick-off value down the task path finds no matching field, and
+        omitting it from the launch fails that launch with a 422 whenever the
+        field is required -- losing the entire card, not just one value.
+
+        Returns ``(prerun, task_values)``. A pipe whose template has no kick-off
+        fields returns an empty ``prerun`` and every value unchanged, which is
+        the behaviour that predates this method.
+        """
+        raw_values, labels = self._collect_card_field_values(card)
+        if not raw_values:
+            return {}, {}
+
+        try:
+            captures = self.kickoff_cache.get(checklist_id)
+        except Exception as exc:
+            # No definitions means nothing resolves to a timeline_id, so there is
+            # nothing safe to put in `prerun`. Leave every value on the task path
+            # rather than guessing: the API discards unrecognised prerun keys and
+            # still returns 201, so a guess would be silent loss.
+            logger.warning(
+                "Could not read kick-off fields for checklist %s (%s); "
+                "sending no prerun for card %s",
+                checklist_id, exc, card.get('id'),
+            )
+            return {}, raw_values
+
+        if not captures:
+            return {}, raw_values
+
+        kickoff_raw: Dict[str, Any] = {}
+        task_values: Dict[str, Any] = {}
+        for key, value in raw_values.items():
+            candidates = [key] + labels.get(key, [])
+            match = next(
+                (c for c in candidates if resolve_capture(c, captures) is not None),
+                None,
+            )
+            if match is not None:
+                kickoff_raw[match] = value
+            else:
+                task_values[key] = value
+
+        if not kickoff_raw:
+            return {}, task_values
+
+        reshape_assignee_values(
+            kickoff_raw, captures,
+            fallback_keys=labels,
+            user_id_mapper=lambda uid: self.id_mapper.get_tallyfy_id(str(uid), 'user'),
+        )
+
+        # strict: an unresolvable key would be dropped server-side with a 201, so
+        # silence would be silent data loss. Every key was just proven resolvable,
+        # so this should never fire -- if it does, cache and encoder disagree.
+        return build_prerun_payload(kickoff_raw, captures, strict=True), task_values
+
+    def _migrate_card_fields(self, card: Dict[str, Any], run_id: str,
+                             only_values: Optional[Dict[str, Any]] = None):
+        """
+        Write a card's field values onto the process that was created from it.
+
+        Values are keyed by the target field's ``timeline_id`` and encoded for
+        the field's type by the shared encoder, then written per task through
+        the bulk ``taskdata`` writer. Both are load-bearing: the API ignores any
+        key that is not a ``timeline_id``, and a stringified value breaks
+        dropdown, multi-select, table and assignee fields -- in every case the
+        write still succeeds, so the loss is invisible without this care.
+
+        Raises on any value that cannot be placed. A card whose fields silently
+        vanish is worse than a card that fails loudly and can be retried; the
+        caller counts the failure and honours ``continue_on_error``.
+
+        ``only_values`` lets the caller pass just the STEP-field half, with
+        anything already sent as ``prerun`` removed. Kick-off values have no
+        task to belong to, so leaving them in would make the strict resolver
+        raise on values that in fact migrated correctly.
+        """
+        raw_values, labels = self._collect_card_field_values(card)
+        if only_values is not None:
+            raw_values = {k: v for k, v in raw_values.items() if k in only_values}
+        if not raw_values:
+            return
+
+        form_fields = extract_run_form_fields(
+            self.tallyfy_client.get_run_form_fields(run_id)
+        )
+
+        reshape_assignee_values(
+            raw_values, form_fields,
+            fallback_keys=labels,
+            user_id_mapper=lambda uid: self.id_mapper.get_tallyfy_id(str(uid), 'user'),
+        )
+
+        payloads = build_task_form_field_payloads(
+            raw_values, form_fields, strict=True, fallback_keys=labels
+        )
+
+        for task_id, taskdata in payloads.items():
+            self.tallyfy_client.update_task_form_field_values(
+                run_id, task_id, taskdata
+            )
+
+        logger.debug(
+            "Migrated %d field value(s) across %d task(s) for process %s",
+            len(raw_values), len(payloads), run_id,
+        )
+
+    def _collect_card_field_values(self, card: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, List[str]]]:
+        """
+        Flatten a Pipefy card's fields into ``{key: value}`` plus resolution hints.
+
+        The key is the Tallyfy capture id this field was mapped to at template
+        time when that mapping exists, and the Pipefy field id otherwise. The
+        hints add the Pipefy field id and label as fallbacks, so a value still
+        resolves when the id mapping is missing but the label survived.
+
+        Pipefy returns multi-value fields in ``array_value`` and everything else
+        in ``value``; ``array_value`` wins when present so multi-selects keep
+        their list shape instead of collapsing to a string.
+
+        Exceptions:
+        - Single-select types (``select``, ``radio``) always use the scalar
+          ``value``; their ``array_value`` is a list that the dropdown encoder
+          cannot match against option text.
+        - ``label_select`` uses ``array_value`` (where Pipefy stores it); the
+          encoder's single-element unwrap handles the one-item list.
+        - ``assignee_select`` reads from ``assignee_values`` (a ``[User]``
+          list), which carries structured ``{id, email, name}`` dicts that
+          ``reshape_assignee_values`` can map through the user id mapper.
+        """
+        raw_values: Dict[str, Any] = {}
+        labels: Dict[str, List[str]] = {}
+
+        _SCALAR_PIPEFY_TYPES = frozenset({'select', 'radio'})
+
+        for field in card.get('fields', []) or []:
+            definition = field.get('field') or {}
+            source_id = definition.get('id')
+            label = definition.get('label')
+            pipefy_type = definition.get('type')
+
+            if pipefy_type == 'assignee_select':
+                assignee_vals = field.get('assignee_values')
+                if assignee_vals:
+                    value = assignee_vals
+                else:
+                    value = field.get('value')
+            elif pipefy_type in _SCALAR_PIPEFY_TYPES:
+                value = field.get('value')
+            else:
+                array_value = field.get('array_value')
+                value = array_value if array_value not in (None, []) else field.get('value')
+
+            if value in (None, '', []):
+                continue
+
+            key = self.id_mapper.get_tallyfy_id(source_id, "field") or source_id
+            if key in (None, ''):
+                logger.warning(
+                    "Skipping a card field with no id and no mapping: %r", definition
+                )
+                continue
+
+            raw_values[key] = value
+            hints = [h for h in (source_id, label) if h not in (None, '', key)]
+            if hints:
+                labels[key] = hints
+
+        return raw_values, labels
+
     def _migrate_card_comments(self, comments: List[Dict], run_id: str):
         """Migrate card comments to process"""
         for comment in comments:

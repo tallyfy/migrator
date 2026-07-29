@@ -144,6 +144,111 @@ would be discarded. Fixing that is the prerequisite for kick-off data migrating 
 paths and that keys are timeline_ids -- the request-key test alone passed for months while
 every live path still sent source-system ids.
 
+## Tallyfy API Contract: form-field values on an EXISTING process
+
+Kick-off data rides `prerun` at LAUNCH. Writing a value onto a process that already
+exists is a **different contract**, and the routes the migrators used for it until
+2026-07 (`/runs/{run}/field/{capture}/value`, `/runs/{run}/captures/{capture}/value`,
+`/runs/{run}/fields/{field}/value`) **do not exist**. Neither does the `{"value": ...}`
+body wrapper they sent. There are exactly two real endpoints:
+
+**1. Single value** -- `PUT /organizations/{org}/form-field/value`
+
+```json
+{"id": "<capture-value id>", "form_value": "<typed value>"}
+```
+
+`id` is the id of the **capture value row** (`core.leads`), which the API resolves with
+`CaptureValue::find($data['id'])`. It is NOT a capture/field definition id and NOT a
+`timeline_id`.
+
+**Capture-value ids are not discoverable through the API**, so a migration cannot use
+this endpoint as its main path: the two places that would expose one
+(`Task::allFormFields()` and `RunTransformer::includeKoFormFields()`) have their
+`$field->unique_id = $lead->id` assignment commented out, so `unique_id` is always null
+in responses. Every vendor client exposes it as `set_form_field_value()` for callers
+that already hold a capture-value id from elsewhere.
+
+**2. Bulk, per task (THE migration path)** --
+`PUT /organizations/{org}/runs/{run_id}/tasks/{task_id}`
+
+```json
+{"taskdata": {"<capture timeline_id>": "<typed value>"}}
+```
+
+This is the canonical bulk writer (`Task::setTaskdataAttribute` ->
+`Task::updateCaptureValues`) and it keys by `timeline_id`, which **is** discoverable:
+`GET /organizations/{org}/runs/{run_id}/form-fields` returns every field with `id` (which
+IS the `timeline_id`), `field_type`, `options`, `columns` and `task_id`. Step fields come
+back under `form_fields`, kick-off fields under `ko_form_fields`.
+
+Like `prerun`, it ignores any key that is not a `timeline_id` **and still returns 200** --
+so a wrong key is silent data loss, not an error.
+
+Use `shared/form_field_values.py` (`extract_run_form_fields` + `build_task_form_field_payloads`).
+It resolves source keys against the live fields and groups them into per-task `taskdata`,
+reusing `prerun_encoder`'s `encode_field_value` -- the per-type shapes are identical on both
+paths, so there is exactly ONE encoder. It is strict by default: an unresolvable value
+raises instead of being skipped.
+
+`shared/tests/test_form_field_values.py` pins the wire contract for every vendor client and
+drives the two live migration paths end to end.
+
+## Tallyfy API Contract: CREATING form fields on a template
+
+Creating a field is a different contract from writing its value. There are
+exactly two routes, and neither is a bare `/{entity}s/{id}/captures`.
+
+**Step fields** — `POST /organizations/{org}/checklists/{checklist_id}/steps/{step_id}/captures`
+
+Registered in `api-v2/routes/api.php` as
+`Route::resource('captures', StepCapturesController::class)->only(['store', 'update', 'destroy'])`,
+nested under `checklists/{checklist_id}/steps/{step_id}`. **It needs BOTH ids.**
+
+> A grep for `post('captures'` does not match a `Route::resource(...)->only(['store'])`
+> line. An earlier audit in this repo made exactly that mistake and concluded no
+> template capture route existed. It does. Grep for `captures` and read the
+> enclosing `Route::prefix` before concluding a route is missing.
+
+**Kick-off fields** — there is **no** `preruns` store route. Kick-off fields ride a
+`prerun` **array on the checklist itself**, accepted by
+`POST /organizations/{org}/checklists` (`CreateChecklistRequest`) and
+`PUT /organizations/{org}/checklists/{id}` (`UpdateChecklistRequest`). Both call
+`addCapturesRules($rules, 'prerun')`, so each entry obeys the same rules as a step
+field. They must therefore be attached **before** the template is created — there is
+no route to add them afterwards.
+
+Both paths validate against `CreateCaptureRequest` / `CaptureRequestValidator`:
+
+| Key | Rule |
+|---|---|
+| `label` | **required** |
+| `field_type` | **required**, in `Capture::$field_types` |
+| `required` | **required**, boolean — must be PRESENT, not merely true |
+| `options` | required_if `field_type` in radio, dropdown, multiselect |
+| `options.*.id` | required, **integer** — a slug id is a 422 |
+| `options.*.text` | required, string |
+| `columns` | required_if `field_type` = table (`columns.*.id` integer, `columns.*.label` string) |
+| `position` | integer |
+
+`FieldTransformer` emits none of that — it emits `type`, `select`, and options nested
+under `config.options` as `{value, label}`. **`shared/capture_shapes.py` normalises it**
+(`normalize_capture` / `normalize_captures`); clients expose
+`create_step_capture(checklist_id, step_id, capture, position=)` and
+`build_prerun_fields(captures)`. Do not hand-roll the shape at a call site.
+
+A malformed field definition raises `TypeError` rather than being coerced: a bare
+string reaching the normaliser means an upstream transformer is broken, and quietly
+migrating it would recreate the class of bug this module exists to prevent.
+
+### ⚠️ Value writes must fail LOUDLY
+
+The pipefy path wrapped every field in `except Exception: logger.warning(...)`. Combined
+with a call-arity bug (`transform_field_value(field)` against a two-argument signature),
+**every single field raised `TypeError`, was downgraded to a warning, and the migration
+printed a success summary with 100% of field values lost.** A failed value write must
+propagate; the phase loop already counts the failure and honours `continue_on_error`.
+
 ## Critical Rules for All Migrators
 
 ### 1. Independence Rule (MANDATORY)

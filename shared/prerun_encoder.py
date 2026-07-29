@@ -239,17 +239,27 @@ def encode_assignees_form(
     guests: List[str] = []
 
     for candidate in candidates:
-        email = str(candidate).strip()
-        if not email or not EMAIL_REGEX.match(email):
+        raw = str(candidate).strip()
+        if not raw:
             continue
 
-        match = next((m for m in members if m.get('email') == email), None)
+        if not EMAIL_REGEX.match(raw):
+            # Deliberately NOT treated as a Tallyfy user id. A bare number here
+            # is a SOURCE-system user id, and the two id spaces are unrelated --
+            # coercing one into the other assigns the task to whichever unrelated
+            # Tallyfy user happens to hold that id, which is worse than dropping
+            # it. Map ids to Tallyfy users upstream (see
+            # ``form_field_values.reshape_assignee_values``); anything still
+            # unmapped is reported by the strict layer rather than invented here.
+            continue
+
+        match = next((m for m in members if m.get('email') == raw), None)
         if match:
             member_id = match.get('id')
             if not any(str(u) == str(member_id) for u in users):
                 users.append(member_id)
-        elif email not in guests:
-            guests.append(email)
+        elif raw not in guests:
+            guests.append(raw)
 
     if guests and not users and current_user_id is not None:
         users.append(current_user_id)
@@ -289,6 +299,15 @@ def encode_field_value(
         return value
 
     field_type = capture.get('field_type') or capture.get('type')
+
+    # Scalar choice types can legitimately arrive wrapped in a one-element list:
+    # several source systems return every choice field as an array (Pipefy's
+    # `array_value` on a label field, for one). One element is unambiguous, so
+    # unwrap it rather than failing to match. Two or more genuinely cannot fit a
+    # single-choice field and are left to fail loudly.
+    if field_type in ('dropdown', 'radio') and isinstance(value, (list, tuple)):
+        if len(value) == 1:
+            value = value[0]
 
     if field_type == 'dropdown':
         option = _find_option(_capture_options(capture), value)
@@ -344,7 +363,20 @@ def encode_field_value(
         if value in (None, ''):
             return value
         if isinstance(value, list):
-            return value
+            encoded_files = []
+            for item in value:
+                if isinstance(item, dict):
+                    encoded_files.append(item)
+                else:
+                    item_url = str(item)
+                    encoded_files.append({
+                        'filename': item_url.split('/')[-1],
+                        'source': 'url',
+                        'subject': file_subject or {},
+                        'uploaded_from': uploaded_from,
+                        'url': item_url,
+                    })
+            return encoded_files
         url = str(value)
         return [{
             'filename': url.split('/')[-1],
@@ -490,7 +522,39 @@ def build_prerun_payload(
             )
             continue
 
-        payload[str(timeline_id)] = encode_field_value(raw_value, capture, **options)
+        encoded = encode_field_value(raw_value, capture, **options)
+
+        if encoded in (None, []) and raw_value not in (None, '', [], {}):
+            unresolved.append(key)
+            logger.warning(
+                "Kick-off value %r for %r could not be encoded for field_type %r; "
+                "it will not be migrated rather than written as an empty value.",
+                raw_value, key, capture.get('field_type') or capture.get('type'),
+            )
+            continue
+
+        field_type = capture.get('field_type') or capture.get('type')
+        if field_type == 'assignees_form' and raw_value not in (None, '', [], {}):
+            # A pre-shaped dict with empty lists is legitimately empty, not loss.
+            is_preshaped_empty = (
+                isinstance(raw_value, dict)
+                and any(k in raw_value for k in ('users', 'guests', 'groups'))
+                and not any(raw_value.get(k) for k in ('users', 'guests', 'groups'))
+            )
+            if (
+                not is_preshaped_empty
+                and isinstance(encoded, dict)
+                and not any(encoded.get(k) for k in ('users', 'guests', 'groups'))
+            ):
+                unresolved.append(key)
+                logger.warning(
+                    "Kick-off assignee value %r for %r resolved to nobody; "
+                    "it will not be migrated rather than written as empty assignees.",
+                    raw_value, key,
+                )
+                continue
+
+        payload[str(timeline_id)] = encoded
 
     if unresolved and strict:
         available = [
