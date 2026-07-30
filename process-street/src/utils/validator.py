@@ -153,12 +153,12 @@ class MigrationValidator:
                 tallyfy_id = self.id_mapper.get_tallyfy_id(ps_id, 'user')
                 
                 if not tallyfy_id:
-                    validation_errors.append(f"No mapping for user {ps_user.get("text")}")
+                    validation_errors.append(f"No mapping for user {ps_user.get('email')}")
                     continue
                 
                 # Verify user exists in Tallyfy
                 if not self.tallyfy_client.validate_import('user', tallyfy_id):
-                    validation_errors.append(f"User {ps_user.get("text")} not found in Tallyfy")
+                    validation_errors.append(f"User {ps_user.get('email')} not found in Tallyfy")
             
             if validation_errors:
                 return {

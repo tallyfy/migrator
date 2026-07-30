@@ -35,7 +35,7 @@ class MigrationValidator:
         if not asana_user.get('gid'):
             errors.append("User missing GID")
         
-        if not asana_user.get("text"):
+        if not asana_user.get('email'):
             errors.append("User missing email address")
         
         if not asana_user.get('name'):

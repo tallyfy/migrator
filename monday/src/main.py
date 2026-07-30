@@ -318,7 +318,7 @@ class MondayMigrator:
                     self.progress.increment('users_processed')
                     
                 except Exception as e:
-                    error_msg = f"Failed to migrate user {monday_user.get("text")}: {e}"
+                    error_msg = f"Failed to migrate user {monday_user.get('email')}: {e}"
                     logger.error(error_msg)
                     results['errors'].append(error_msg)
                     self.error_handler.handle_error(e, context=f"user_{monday_user.get('id')}")

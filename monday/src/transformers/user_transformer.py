@@ -295,7 +295,7 @@ class UserTransformer:
                 report['user_status']['active'] += 1
             
             # Check for issues
-            if not user.get("text"):
+            if not user.get('email'):
                 report['warnings'].append(f"User {user.get('id')} has no email address")
             
             if user.get('is_pending'):
@@ -332,7 +332,8 @@ class UserTransformer:
         guest_members = []
         
         for guest in guest_users:
-            if not guest.get("text"):
+            # Source key is `email`; reading "text" here skipped every guest.
+            if not guest.get('email'):
                 continue
             
             member = self.transform_user(guest)

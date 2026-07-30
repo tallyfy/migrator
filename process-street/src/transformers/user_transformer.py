@@ -167,7 +167,10 @@ class UserTransformer(BaseTransformer):
             Tallyfy guest object
         """
         ps_id = ps_guest.get('id', '')
-        email = ps_guest.get("text", '')
+        # Same rename defect as transform() above: the source key is `email`.
+        # A guest IS its email address in Tallyfy, so reading the wrong key here
+        # produced guests with no identity at all.
+        email = ps_guest.get('email', '')
         
         # Generate guest ID
         tallyfy_id = self.generate_tallyfy_id('gst', ps_id)

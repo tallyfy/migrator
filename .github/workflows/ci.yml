@@ -117,18 +117,16 @@ jobs:
   # Per-vendor suites, for the vendors whose suites actually run green. Kept separate
   # from shared-tests so one vendor's rot cannot mask a shared/ regression.
   #
-  # Deliberately NOT the full list. asana/ and process-street/ construct an
-  # orchestrator class that does not exist (`VendorMigrationOrchestrator`,
-  # `ProcessStreetMigrationOrchestrator`) with an arity the real classes never had.
-  # Tracked in #6; add each vendor here as its suite is repaired -- a
-  # permanently-red job teaches everyone to ignore CI.
+  # Not yet the full list -- the other 13 vendors have no tests/ directory at all.
+  # Add each here as a suite is written; a permanently-red job teaches everyone to
+  # ignore CI, so a vendor only joins once it is green. Tracked in #6.
   vendor-tests:
     name: tests ${{ matrix.vendor }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        vendor: [kissflow, monday]
+        vendor: [asana, kissflow, monday, process-street]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
