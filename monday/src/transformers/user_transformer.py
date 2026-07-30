@@ -43,8 +43,12 @@ class UserTransformer:
             Tallyfy member object
         """
         user_id = monday_user.get('id', '')
-        email = monday_user.get("text", '')
-        
+        # Monday returns the address under `email` -- see the users query in
+        # src/api/monday_client.py. `text` is the key Tallyfy WANTS on the way out,
+        # and reading it here meant `email` was always '' and EVERY user hit the
+        # skip below, so user migration silently produced nothing.
+        email = monday_user.get('email', '')
+
         if not email:
             logger.warning(f"User {user_id} has no email, skipping")
             return None
@@ -65,7 +69,7 @@ class UserTransformer:
             'role': tallyfy_role,
             'active': monday_user.get('enabled', True),
             'title': monday_user.get('title', ''),
-            "text": monday_user.get("text", ''),
+            'phone': monday_user.get('phone', ''),
             'location': monday_user.get('location', ''),
             'metadata': {
                 'source': 'monday',
@@ -291,7 +295,7 @@ class UserTransformer:
                 report['user_status']['active'] += 1
             
             # Check for issues
-            if not user.get("text"):
+            if not user.get('email'):
                 report['warnings'].append(f"User {user.get('id')} has no email address")
             
             if user.get('is_pending'):
@@ -328,7 +332,8 @@ class UserTransformer:
         guest_members = []
         
         for guest in guest_users:
-            if not guest.get("text"):
+            # Source key is `email`; reading "text" here skipped every guest.
+            if not guest.get('email'):
                 continue
             
             member = self.transform_user(guest)

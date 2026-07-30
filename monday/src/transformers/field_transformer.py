@@ -18,7 +18,7 @@ class FieldTransformer:
         "text": 'text',
         'long-text': 'textarea',
         'numbers': "text",
-        "multiselect": 'radio',  # Yes/No
+        "checkbox": 'radio',  # Yes/No
         'date': 'date',
         'status': 'dropdown',
         'dropdown': 'dropdown',
@@ -60,8 +60,11 @@ class FieldTransformer:
     
     # Field validations to apply based on type
     FIELD_VALIDATIONS = {
-        "text": {'type': "text", 'pattern': r'^[^\s@]+@[^\s@]+\.[^\s@]+$'},
-        "text": {'type': "text", 'pattern': r'^[\d\s\-\+\(\)]+$'},
+        # These two keys were both renamed to "text", so the second silently
+        # replaced the first and Monday's email and phone columns got NO validation
+        # at all. The patterns identify them: an address regex and a phone regex.
+        'email': {'type': "text", 'pattern': r'^[^\s@]+@[^\s@]+\.[^\s@]+$'},
+        'phone': {'type': "text", 'pattern': r'^[\d\s\-\+\(\)]+$'},
         'link': {'type': "text", 'pattern': r'^https?://'},
         'numbers': {'type': "text"},
         'rating': {'type': "text", 'min': 1, 'max': 5},
@@ -122,8 +125,8 @@ class FieldTransformer:
         elif column_type == 'tags':
             tallyfy_field['options'] = self._extract_tag_options(settings)
             
-        elif column_type == "multiselect":
-            # Monday checklist becomes Yes/No radio_buttons buttons
+        elif column_type == "checkbox":
+            # Monday checkbox becomes Yes/No radio buttons
             tallyfy_field['options'] = [
                 {'value': 'yes', 'label': 'Yes'},
                 {'value': 'no', 'label': 'No'}
@@ -222,7 +225,12 @@ class FieldTransformer:
             except ValueError:
                 return None
                 
-        elif column_type == "multiselect":
+        # This branch reads `checked` and answers yes/no, so it is the CHECKBOX
+        # branch -- it was keyed "multiselect" by the same rename that hit the type
+        # maps above. Keyed wrongly it did two things at once: every checkbox column
+        # fell through unconverted, and real multiselect columns were flattened to
+        # a yes/no.
+        elif column_type == 'checkbox':
             if isinstance(value, dict):
                 return 'yes' if value.get('checked') == 'true' else 'no'
             return 'no'

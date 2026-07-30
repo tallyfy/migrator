@@ -98,7 +98,6 @@ def configure_module_loggers():
         'api.tallyfy_client': logging.DEBUG,
         'api.ai_client': logging.INFO,
         'transformers.field_transformer': logging.INFO,
-        'transformers.template_transformer': logging.INFO,
         'transformers.instance_transformer': logging.INFO,
         'transformers.user_transformer': logging.INFO,
         'utils.checkpoint_manager': logging.INFO,

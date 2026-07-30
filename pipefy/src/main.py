@@ -359,7 +359,9 @@ class PipefyMigrationOrchestrator:
                 
                 # Transform user
                 tallyfy_user = {
-                    "text": user.get("text"),
+                    # Pipefy returns the address under `email` (see the members
+                    # query in pipefy_client.py:284).
+                    "text": user.get('email'),
                     'first_name': user.get('name', '').split()[0] if user.get('name') else '',
                     'last_name': ' '.join(user.get('name', '').split()[1:]) if user.get('name') else '',
                     'username': user.get('username'),

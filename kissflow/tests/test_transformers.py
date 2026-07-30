@@ -34,7 +34,9 @@ class TestFieldTransformer:
         result = self.transformer.transform_field_definition(kissflow_field)
         
         assert result['name'] == 'Employee Name'
-        assert result['type'] == 'short_text'
+        # Tallyfy's field_type for a single-line field is `text`; `short_text` is not
+        # one of Capture::$field_types. See the field-type table in CLAUDE.md.
+        assert result['type'] == 'text'
         assert result['required'] == True
         assert result['alias'] == 'kissflow_field_1'
     
@@ -93,7 +95,7 @@ class TestFieldTransformer:
         
         result = self.transformer.transform_field_definition(kissflow_field)
         
-        assert result['type'] == 'short_text'
+        assert result['type'] == 'text'
         assert result['readonly'] == True
         assert 'Calculated field' in result['description']
 
@@ -123,7 +125,8 @@ class TestBoardTransformer:
         
         # Check paradigm shift warning in description
         assert 'PARADIGM SHIFT NOTICE' in result['description']
-        assert 'Kanban→Sequential' in result['metadata']['paradigm_shift']
+        # `paradigm_shift` carries a machine-readable identifier, not a display label.
+        assert result['metadata']['paradigm_shift'] == 'kanban_to_sequential'
         
         # Verify step multiplication (4 columns × 3 steps + initial + final)
         # Initial creation + (4 columns × 3 steps) + final completion = 14 steps
@@ -179,7 +182,9 @@ class TestUserTransformer:
         
         result = self.transformer.transform_user(kissflow_user)
         
-        assert result['email'] == 'admin@company.com'
+        # The member payload carries the email under `text`, matching every other
+        # vendor's user_transformer in this repo.
+        assert result['text'] == 'admin@company.com'
         assert result['role'] == 'admin'
         assert result['active'] == True
     

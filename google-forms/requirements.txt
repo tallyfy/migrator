@@ -4,6 +4,13 @@
 requests>=2.31.0
 python-dotenv>=1.0.0
 
+# Google API access. src/api/google_forms_client.py imports googleapiclient,
+# google.auth, google.oauth2 and google_auth_oauthlib -- none of which were
+# declared here, so a clean install could not import the migrator at all.
+google-api-python-client>=2.198.0
+google-auth>=2.56.2
+google-auth-oauthlib>=1.4.0
+
 # AI augmentation
 anthropic>=0.18.0
 

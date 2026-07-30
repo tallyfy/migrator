@@ -44,7 +44,10 @@ class UserTransformer:
                 role = 'light'
         
         tallyfy_member = {
-            "text": asana_user.get("text", ''),
+            # Asana returns the address under `email` (opt_fields in
+            # asana_client.py:162). Reading "text" -- the key Tallyfy wants on the
+            # way OUT -- made every migrated member carry an EMPTY email.
+            "text": asana_user.get('email', ''),
             'first_name': first_name,
             'last_name': last_name,
             'role': role,
@@ -56,7 +59,7 @@ class UserTransformer:
             }
         }
         
-        logger.debug(f"Transformed user {full_name} ({asana_user.get("text")}) to {role} role")
+        logger.debug(f"Transformed user {full_name} ({asana_user.get('email')}) to {role} role")
         
         return tallyfy_member
     
@@ -139,8 +142,8 @@ class UserTransformer:
         }
         
         # Map any available preferences
-        if asana_user.get("text"):
-            preferences['notification_email'] = asana_user["text"]
+        if asana_user.get('email'):
+            preferences['notification_email'] = asana_user['email']
         
         return preferences
     

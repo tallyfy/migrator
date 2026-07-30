@@ -26,7 +26,9 @@ class TestFieldTransformer(unittest.TestCase):
         
         result = self.transformer.transform_column(column)
         
-        self.assertEqual(result['type'], 'short_text')
+        # Tallyfy's single-line field type is `text`; `short_text` is not one of
+        # Capture::$field_types.
+        self.assertEqual(result['type'], 'text')
         self.assertEqual(result['name'], 'Project Name')
         self.assertEqual(result['alias'], 'monday_text1')
     
@@ -61,7 +63,8 @@ class TestFieldTransformer(unittest.TestCase):
         
         result = self.transformer.transform_column(column)
         
-        self.assertEqual(result['type'], 'assignee_picker')
+        # The Tallyfy field type is `assignees_form`.
+        self.assertEqual(result['type'], 'assignees_form')
         self.assertEqual(result['name'], 'Assignee')
     
     def test_timeline_field_transformation(self):
@@ -205,9 +208,12 @@ class TestBoardTransformer(unittest.TestCase):
         self.assertIn('TIMELINE VIEW TRANSFORMATION', result['description'])
         self.assertEqual(result['metadata']['primary_view'], 'timeline')
         
-        # Check for phase-based steps
-        phase_steps = [s for s in result['steps'] if 'phase' in s.get('metadata', {})]
+        # Check for phase-based steps. _create_timeline_steps tags each one with the
+        # source group it came from, so `group_id`/`is_phase_start` is the metadata
+        # contract -- there is no bare `phase` key.
+        phase_steps = [s for s in result['steps'] if 'group_id' in s.get('metadata', {})]
         self.assertTrue(len(phase_steps) > 0)
+        self.assertTrue(any(s['metadata'].get('is_phase_start') for s in phase_steps))
     
     def test_permission_transformation(self):
         """Test board permission transformation."""
@@ -247,7 +253,8 @@ class TestUserTransformer(unittest.TestCase):
         
         result = self.transformer.transform_user(monday_user)
         
-        self.assertEqual(result['email'], 'john@example.com')
+        # The member payload carries the email under `text`, as in every vendor.
+        self.assertEqual(result['text'], 'john@example.com')
         self.assertEqual(result['firstname'], 'John')
         self.assertEqual(result['lastname'], 'Doe')
         self.assertEqual(result['role'], 'member')
@@ -356,7 +363,8 @@ class TestInstanceTransformer(unittest.TestCase):
         )
         
         self.assertEqual(result['name'], 'Complete Documentation')
-        self.assertEqual(result['blueprint_id'], 'blueprint123')
+        # The API entity is `checklist`; `blueprint` is only the UI name for it.
+        self.assertEqual(result['checklist_id'], 'blueprint123')
         self.assertEqual(result['status'], 'active')
         self.assertIn('data', result)
         self.assertEqual(result['metadata']['original_id'], 'item123')

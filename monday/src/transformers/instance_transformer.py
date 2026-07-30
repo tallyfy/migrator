@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Generator, List, Optional
 from datetime import datetime
 from .field_transformer import FieldTransformer
 
@@ -435,6 +435,3 @@ class InstanceTransformer:
         # Yield remaining items
         if batch:
             yield batch
-
-
-from typing import Generator

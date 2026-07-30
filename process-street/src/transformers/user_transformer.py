@@ -36,12 +36,16 @@ class UserTransformer(BaseTransformer):
         """
         # Extract Process Street user data
         ps_id = ps_user.get('id', '')
-        email = ps_user.get("text", '')
-        
+        # The source key is `email` (OBJECT_MAPPING.md: "Email -> Email (unique
+        # identifier)"). `text` is the key Tallyfy wants on the way OUT; reading and
+        # validating it here meant every real user failed the check below with
+        # ValueError: Missing required fields.
+        email = ps_user.get('email', '')
+
         # Validate required fields
         is_valid, missing = self.validate_required_fields(
-            ps_user, 
-            ["text"]
+            ps_user,
+            ['email']
         )
         
         if not is_valid:
@@ -61,7 +65,10 @@ class UserTransformer(BaseTransformer):
             'role': self._map_role(ps_user.get('role', 'Member')),
             'is_active': ps_user.get('active', True),
             'timezone': ps_user.get('timezone', 'UTC'),
-            "text": ps_user.get("text", ''),
+            # A second "text" key sat here and, being later in the literal, silently
+            # overwrote the email above with ''. Removed rather than guessed at: the
+            # field it was renamed FROM is not recoverable from this repo, and an
+            # invented key would be worse than an absent one.
             'title': ps_user.get('title', ''),
             'department': ps_user.get('department', ''),
             'location': ps_user.get('location', ''),
@@ -160,7 +167,10 @@ class UserTransformer(BaseTransformer):
             Tallyfy guest object
         """
         ps_id = ps_guest.get('id', '')
-        email = ps_guest.get("text", '')
+        # Same rename defect as transform() above: the source key is `email`.
+        # A guest IS its email address in Tallyfy, so reading the wrong key here
+        # produced guests with no identity at all.
+        email = ps_guest.get('email', '')
         
         # Generate guest ID
         tallyfy_id = self.generate_tallyfy_id('gst', ps_id)

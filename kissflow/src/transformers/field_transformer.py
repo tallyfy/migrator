@@ -30,7 +30,11 @@ class FieldTransformer:
         'dropdown': 'dropdown',
         'multi_dropdown': 'multiselect',
         "radio": 'radio',
-        "multiselect": 'radio',  # Single checklist becomes yes/no radio_buttons
+        # Was also keyed "multiselect", so the real multiselect mapping below
+        # replaced it and Kissflow's Checkbox type lost its mapping entirely.
+        # Two docs in this repo agree it is binary: OBJECT_MAPPING.md:80
+        # "Checkbox | Radio (Yes/No)" and README.md:416 "'checkbox': 'radio',  # Yes/No".
+        'checkbox': 'radio',  # Single checkbox becomes a yes/no radio
         'multiselect': 'multiselect',
         
         # Advanced Fields
@@ -123,7 +127,9 @@ class FieldTransformer:
                 tallyfy_field['date_format'] = kissflow_field['DateFormat']
         
         # Handle yes/no field
-        if field_type == 'yes_no':
+        # A checkbox maps to the same yes/no radio, and a Tallyfy radio REQUIRES
+        # options, so it takes this branch too rather than emitting options: [].
+        if field_type in ('yes_no', 'checkbox'):
             tallyfy_field['options'] = [
                 {'value': 'yes', 'label': 'Yes'},
                 {'value': 'no', 'label': 'No'}

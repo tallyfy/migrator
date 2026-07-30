@@ -5,9 +5,12 @@ Provides common functionality for all data transformers
 
 import logging
 import json
-from typing import Dict, List, Optional, Any, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Any, Tuple
 from datetime import datetime
 import hashlib
+
+if TYPE_CHECKING:  # pragma: no cover - import only for the annotation below
+    from utils.id_mapper import IDMapper
 
 logger = logging.getLogger(__name__)
 

@@ -312,7 +312,7 @@ class MigrationOrchestrator:
                     successful += 1
                 
             except Exception as e:
-                logger.error(f"Failed to migrate user {ps_user.get("text", 'unknown')}: {e}")
+                logger.error(f"Failed to migrate user {ps_user.get('email', 'unknown')}: {e}")
                 failed += 1
                 if not self.config['migration']['options'].get('continue_on_error', False):
                     raise
