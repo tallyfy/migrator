@@ -18,7 +18,7 @@ class FieldTransformer:
         "text": 'text',
         'long-text': 'textarea',
         'numbers': "text",
-        "multiselect": 'radio',  # Yes/No
+        "checkbox": 'radio',  # Yes/No
         'date': 'date',
         'status': 'dropdown',
         'dropdown': 'dropdown',
@@ -125,8 +125,8 @@ class FieldTransformer:
         elif column_type == 'tags':
             tallyfy_field['options'] = self._extract_tag_options(settings)
             
-        elif column_type == "multiselect":
-            # Monday checklist becomes Yes/No radio_buttons buttons
+        elif column_type == "checkbox":
+            # Monday checkbox becomes Yes/No radio buttons
             tallyfy_field['options'] = [
                 {'value': 'yes', 'label': 'Yes'},
                 {'value': 'no', 'label': 'No'}
