@@ -120,17 +120,25 @@ class DatabaseMigrator:
         type_mapping = {
             'text': String(255),
             'textarea': Text,
-            "text": Float,
+            # 'number', 'email' and 'phone' below were all renamed to "text", so
+            # each was silently replaced and those Pipefy types fell through to the
+            # default SQL type. All three are real identifiers in this vendor's own
+            # FIELD_TYPE_MAPPING; the values (Float, String(255), String(50))
+            # identify which was which.
+            'number': Float,
             'currency': Float,
             'percentage': Float,
             'date': DateTime,
             'datetime': DateTime,
             'due_date': DateTime,
-            "text": String(255),
-            "text": String(50),
+            'email': String(255),
+            'phone': String(50),
             'select': String(255),
             "radio": String(255),
-            "multiselect": Boolean,
+            # A second "multiselect" key sat here mapping to Boolean. The real
+            # multiselect mapping below already replaced it, so removing it changes
+            # nothing -- and unlike the three above, there is no evidence in this
+            # repo for which type it was renamed from, so it is not guessed at.
             'multiselect': Text,  # JSON array
             'attachment': Text,  # JSON array
             'assignee_select': String(255),

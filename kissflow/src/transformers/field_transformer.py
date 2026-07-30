@@ -30,7 +30,10 @@ class FieldTransformer:
         'dropdown': 'dropdown',
         'multi_dropdown': 'multiselect',
         "radio": 'radio',
-        "multiselect": 'radio',  # Single checklist becomes yes/no radio_buttons
+        # Was also keyed "multiselect", so the real multiselect mapping below
+        # replaced it and Kissflow's Checkbox type lost its mapping entirely.
+        # OBJECT_MAPPING.md: "Checkbox | Radio (Yes/No)".
+        'checkbox': 'radio',  # Single checkbox becomes a yes/no radio
         'multiselect': 'multiselect',
         
         # Advanced Fields

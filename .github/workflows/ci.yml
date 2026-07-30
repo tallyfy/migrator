@@ -119,17 +119,16 @@ jobs:
   #
   # Deliberately NOT the full list. asana/ and process-street/ construct an
   # orchestrator class that does not exist (`VendorMigrationOrchestrator`,
-  # `ProcessStreetMigrationOrchestrator`) with an arity the real classes never had,
-  # and monday/ has 9 substantive failures that were invisible until its
-  # import-time crash was fixed. Add each vendor here as its suite is repaired --
-  # a permanently-red job teaches everyone to ignore CI.
+  # `ProcessStreetMigrationOrchestrator`) with an arity the real classes never had.
+  # Tracked in #6; add each vendor here as its suite is repaired -- a
+  # permanently-red job teaches everyone to ignore CI.
   vendor-tests:
     name: tests ${{ matrix.vendor }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        vendor: [kissflow]
+        vendor: [kissflow, monday]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
