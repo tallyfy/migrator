@@ -30,7 +30,11 @@ class FieldTransformer:
         'dropdown': 'dropdown',
         'multi_dropdown': 'multiselect',
         "radio": 'radio',
-        'checkbox': 'multiselect',  # Multi-option select (arrays); yes_no handles binary
+        # Was also keyed "multiselect", so the real multiselect mapping below
+        # replaced it and Kissflow's Checkbox type lost its mapping entirely.
+        # Two docs in this repo agree it is binary: OBJECT_MAPPING.md:80
+        # "Checkbox | Radio (Yes/No)" and README.md:416 "'checkbox': 'radio',  # Yes/No".
+        'checkbox': 'radio',  # Single checkbox becomes a yes/no radio
         'multiselect': 'multiselect',
         
         # Advanced Fields
@@ -100,7 +104,7 @@ class FieldTransformer:
             )
         
         # Handle selection fields (dropdown, radio_buttons, checklist)
-        if field_type in ['dropdown', 'multi_dropdown', "radio", 'multiselect', 'checkbox']:
+        if field_type in ['dropdown', 'multi_dropdown', "radio", 'multiselect']:
             tallyfy_field['options'] = self._transform_options(
                 kissflow_field.get('Options', [])
             )
@@ -123,7 +127,9 @@ class FieldTransformer:
                 tallyfy_field['date_format'] = kissflow_field['DateFormat']
         
         # Handle yes/no field
-        if field_type == 'yes_no':
+        # A checkbox maps to the same yes/no radio, and a Tallyfy radio REQUIRES
+        # options, so it takes this branch too rather than emitting options: [].
+        if field_type in ('yes_no', 'checkbox'):
             tallyfy_field['options'] = [
                 {'value': 'yes', 'label': 'Yes'},
                 {'value': 'no', 'label': 'No'}
@@ -334,7 +340,7 @@ class FieldTransformer:
                 return value.get('Value') or value.get('Id')
             return value
         
-        elif field_type in ['multi_dropdown', 'multiselect', 'checkbox']:
+        elif field_type in ['multi_dropdown', 'multiselect']:
             # Multiple selection
             if isinstance(value, list):
                 return [
