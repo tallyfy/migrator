@@ -62,10 +62,16 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-        # The shared suite loads each vendor's tallyfy_client by path to assert the
-        # body actually put on the wire, so it needs those clients' third-party
-        # imports -- `requests` and `backoff` -- not just pytest.
-      - run: pip install pytest requests backoff
+        # The shared suite loads real vendor modules by path -- every vendor's
+        # tallyfy_client (to assert the body actually put on the wire), plus
+        # pipefy/src/main.py and process-street/src/main.py to drive the two live
+        # migration paths end to end. So it needs those vendors' own dependency
+        # sets, not a hand-listed few: pinning individual packages here means
+        # chasing a new ModuleNotFoundError every time a vendor adds an import.
+      - run: |
+          pip install pytest
+          pip install -r pipefy/requirements.txt
+          pip install -r process-street/requirements.txt
       - run: python -m pytest shared/tests/ -q
 
   # Proves each vendor's orchestrator can actually be imported with its declared
