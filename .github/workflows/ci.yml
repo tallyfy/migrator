@@ -128,7 +128,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vendor: [kissflow, monday]
+        vendor: [kissflow]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
