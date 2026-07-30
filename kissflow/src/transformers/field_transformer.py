@@ -30,10 +30,7 @@ class FieldTransformer:
         'dropdown': 'dropdown',
         'multi_dropdown': 'multiselect',
         "radio": 'radio',
-        # Was also keyed "multiselect", so the real multiselect mapping below
-        # replaced it and Kissflow's Checkbox type lost its mapping entirely.
-        # OBJECT_MAPPING.md: "Checkbox | Radio (Yes/No)".
-        'checkbox': 'radio',  # Single checkbox becomes a yes/no radio
+        'checkbox': 'multiselect',  # Multi-option select (arrays); yes_no handles binary
         'multiselect': 'multiselect',
         
         # Advanced Fields
@@ -103,7 +100,7 @@ class FieldTransformer:
             )
         
         # Handle selection fields (dropdown, radio_buttons, checklist)
-        if field_type in ['dropdown', 'multi_dropdown', "radio", 'multiselect']:
+        if field_type in ['dropdown', 'multi_dropdown', "radio", 'multiselect', 'checkbox']:
             tallyfy_field['options'] = self._transform_options(
                 kissflow_field.get('Options', [])
             )
@@ -337,7 +334,7 @@ class FieldTransformer:
                 return value.get('Value') or value.get('Id')
             return value
         
-        elif field_type in ['multi_dropdown', 'multiselect']:
+        elif field_type in ['multi_dropdown', 'multiselect', 'checkbox']:
             # Multiple selection
             if isinstance(value, list):
                 return [
