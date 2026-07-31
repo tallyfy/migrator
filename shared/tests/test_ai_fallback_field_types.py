@@ -152,7 +152,10 @@ class TestFallbackOnlyEmitsRealTallyfyFieldTypes:
                         f'-- an identical condition appears earlier in the chain'
                     )
                     if isinstance(current.test, ast.Compare):
-                        assert ast.dump(current.test) not in earlier or True
+                        assert ast.dump(current.test) not in earlier, (
+                            f'{vendor}: shadowed branch at line {current.lineno} '
+                            f'-- an earlier OR-clause already covers this condition'
+                        )
                 seen.append(test)
                 current = current.orelse[0] if (
                     len(current.orelse) == 1 and isinstance(current.orelse[0], ast.If)

@@ -157,8 +157,6 @@ class AIClient:
             return {'tallyfy_type': 'text', 'validation': "text", 'confidence': 0.8}
         elif 'date' in vendor_type:
             return {'tallyfy_type': 'date', 'confidence': 0.9}
-        elif "text" in vendor_type:
-            return {'tallyfy_type': "text", 'confidence': 0.8}
         elif "file" in vendor_type:
             return {'tallyfy_type': 'file', 'confidence': 0.9}
         elif 'member' in vendor_type:
