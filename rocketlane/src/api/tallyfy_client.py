@@ -179,9 +179,17 @@ class TallyfyClient:
 
         checklist = self._make_request('POST', '/checklists', json=data)
         
-        # Add steps if provided
+        # Add steps if provided -- flatten phase groups whose tasks are
+        # nested under a 'steps' key so every task reaches the API.
         if steps:
-            for idx, step in enumerate(steps):
+            flat_steps = []
+            for step in steps:
+                if step.get('type') == 'group' and step.get('steps'):
+                    flat_steps.append(step)
+                    flat_steps.extend(step['steps'])
+                else:
+                    flat_steps.append(step)
+            for idx, step in enumerate(flat_steps):
                 self.add_step_to_checklist(checklist['id'], step, position=idx)
         
         return checklist
@@ -199,8 +207,9 @@ class TallyfyClient:
         }
         
         # Add form fields if present
-        if 'fields' in step_data:
-            data['captures'] = self._transform_fields(step_data['fields'])
+        fields = step_data.get('fields') or step_data.get('form_fields')
+        if fields:
+            data['captures'] = normalize_captures(self._transform_fields(fields))
         
         return self._make_request('POST', f'/checklists/{checklist_id}/steps', json=data)
     
