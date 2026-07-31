@@ -424,8 +424,26 @@ class RocketLaneMigrationOrchestrator:
                         if transformed.get('ai_decisions'):
                             results['ai_decisions'].extend(transformed['ai_decisions'])
                         
-                        # Create blueprint in Tallyfy
-                        blueprint = self.tallyfy_client.create_checklist(transformed['checklist'])
+                        # Create blueprint in Tallyfy.
+                        #
+                        # `transform_template` returns name/description/summary/
+                        # metadata/steps/kickoff_form -- there has never been a
+                        # 'checklist' key, so this raised KeyError before it
+                        # reached the client, and the except below reported it as
+                        # "Failed to migrate template". Kick-off fields arrive as
+                        # {'name': ..., 'fields': [...]}, and must ride the create
+                        # body: there is no route to add them afterwards.
+                        kickoff_fields = [
+                            field
+                            for field in (transformed.get('kickoff_form') or {}).get('fields', [])
+                            if field
+                        ]
+                        blueprint = self.tallyfy_client.create_checklist(
+                            name=transformed['name'],
+                            description=transformed.get('description', ''),
+                            steps=transformed.get('steps'),
+                            prerun=kickoff_fields or None,
+                        )
                         
                         # Create steps
                         for step in transformed.get('steps', []):

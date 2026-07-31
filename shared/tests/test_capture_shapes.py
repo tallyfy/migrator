@@ -737,6 +737,7 @@ WIRED_VENDORS = [
     ('monday', 'monday/src/main.py'),
     ('pipefy', 'pipefy/src/main.py'),
     ('process-street', 'process-street/src/main.py'),
+    ('rocketlane', 'rocketlane/src/main.py'),
     ('surveymonkey', 'surveymonkey/src/main.py'),
     ('typeform', 'typeform/src/main.py'),
 ]
