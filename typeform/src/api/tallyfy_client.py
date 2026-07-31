@@ -199,8 +199,9 @@ class TallyfyClient:
         }
         
         # Add form fields if present
-        if 'fields' in step_data:
-            data['captures'] = self._transform_fields(step_data['fields'])
+        fields = step_data.get('fields') or step_data.get('form_fields')
+        if fields:
+            data['captures'] = self._transform_fields(fields)
         
         return self._make_request('POST', f'/checklists/{checklist_id}/steps', json=data)
     
