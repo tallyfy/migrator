@@ -413,10 +413,19 @@ class SurveyMonkeyMigrator:
 
                 if not self.dry_run:
                     # Create blueprint in Tallyfy
+                    # The field transformer returns None for the `presentation`
+                    # family, and normalize_captures raises on a non-dict, so
+                    # drop those before building the prerun array.
+                    kickoff_fields = [
+                        field
+                        for field in (blueprint.get('kickoff_form') or {}).get('fields', [])
+                        if field
+                    ]
                     result = self.tallyfy.create_checklist(
                         blueprint['name'],
                         blueprint.get('description', ''),
-                        blueprint.get('steps')
+                        blueprint.get('steps'),
+                        prerun=kickoff_fields or None
                     )
 
                     if result:

@@ -396,8 +396,24 @@ class TypeformMigrator:
                 
                 if not self.dry_run:
                     # Create blueprint in Tallyfy
+                    # Pass the fields by name. Handing the whole dict to a
+                    # positional `name` parameter made the client slice a dict
+                    # (`name[:250]`), so template creation could never succeed.
+                    # The field transformer returns None for group/statement/
+                    # screen items, and normalize_captures raises on a non-dict,
+                    # so drop those before building the prerun array.
+                    kickoff_fields = [
+                        field
+                        for field in (blueprint.get('kickoff_form') or {}).get('fields', [])
+                        if field
+                    ]
                     result = self.error_handler.with_retry(
-                        lambda: self.tallyfy.create_checklist(blueprint)
+                        lambda: self.tallyfy.create_checklist(
+                            name=blueprint['name'],
+                            description=blueprint.get('description', ''),
+                            steps=blueprint.get('steps'),
+                            prerun=kickoff_fields or None,
+                        )
                     )
                     
                     if result:

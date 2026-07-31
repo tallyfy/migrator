@@ -335,9 +335,9 @@ class KissflowMigrator:
                     user_mapping[user['Id']] = created_member['id']
                     
                     self.stats['users']['migrated'] += 1
-                    logger.info(f"✓ Migrated user: {tallyfy_member["text"]}")
+                    logger.info(f"✓ Migrated user: {tallyfy_member['text']}")
                 else:
-                    logger.info(f"[DRY RUN] Would migrate user: {tallyfy_member["text"]}")
+                    logger.info(f"[DRY RUN] Would migrate user: {tallyfy_member['text']}")
                     user_mapping[user['Id']] = f"dry_run_{user['Id']}"
                 
             except Exception as e:

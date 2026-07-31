@@ -3,6 +3,17 @@
 import requests
 import logging
 from typing import Dict, List, Optional, Any
+
+# The repo root holds the shared package. This module is imported both via
+# `main.py` (which bootstraps the path itself) and directly by tests, so it
+# cannot rely on a caller having done it.
+import os as _os, sys as _sys
+_sys.path.insert(
+    0,
+    _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))),
+)
+from shared.capture_shapes import normalize_captures
+
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -141,8 +152,21 @@ class TallyfyClient:
         response.raise_for_status()
         return response.json()
     
+
+    @staticmethod
+    def build_prerun_fields(captures):
+        """
+        Normalise kick-off fields for a checklist's ``prerun`` array.
+
+        api-v2 serves no ``preruns`` store route: kick-off fields are sent as a
+        ``prerun`` array on the checklist itself. Each entry obeys the same
+        capture rules as a step field.
+        """
+        return normalize_captures(captures)
+
     def create_blueprint(self, name: str, description: str = '',
-                        steps: List[Dict] = None) -> Dict[str, Any]:
+                        steps: List[Dict] = None,
+                        prerun: List[Dict] = None) -> Dict[str, Any]:
         """Create a blueprint (template).
         
         Args:
@@ -159,6 +183,13 @@ class TallyfyClient:
             'organization_id': self.organization_id,
             'steps': steps or []
         }
+
+        # Kick-off fields ride a `prerun` array on this create body. There is
+        # no route to add them afterwards, so if they are not here they are
+        # never created -- and every kick-off value then has nothing to key
+        # against at launch. The wire key is `prerun`, not `kick_off_form`.
+        if prerun:
+            data['prerun'] = self.build_prerun_fields(prerun)
         response = self.session.post(f"{self.base_url}/api/organizations/{self.organization_id}/checklists", json=data)
         response.raise_for_status()
         return response.json()
