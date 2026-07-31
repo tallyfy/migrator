@@ -151,8 +151,8 @@ commented out, every one referencing `create_template` -- a method that exists n
 in this repo. bpmn calls the same absent method. Their clients can now carry a
 `prerun`, but nothing hands them one, so kick-off data still does not migrate for
 those nine. `shared/tests/test_capture_shapes.py` gates both halves separately: a
-repo-wide client gate over all 17 vendors, and an orchestrator gate over the six that
-reach a live create call.
+repo-wide client gate over all 17 vendors, and an orchestrator gate over the eight
+that reach a live create call.
 
 `shared/tests/test_prerun_request_key.py` pins the request key across every vendor client.
 `shared/tests/test_prerun_wiring.py` pins that the encoder is actually REACHED on live
