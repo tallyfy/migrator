@@ -372,10 +372,15 @@ class KissflowMigrator:
                 
                 if not self.dry_run:
                     # Create blueprint for dataset management
+                    kickoff_fields = [
+                        field for field in (blueprint.get('kick_off_form') or [])
+                        if field
+                    ]
                     created_blueprint = self.tallyfy_client.create_blueprint(
                         name=blueprint['name'],
                         description=blueprint['description'],
-                        steps=blueprint['steps']
+                        steps=blueprint['steps'],
+                        prerun=kickoff_fields or None,
                     )
                     
                     # Store mapping
@@ -426,10 +431,15 @@ class KissflowMigrator:
                 
                 if not self.dry_run:
                     # Create blueprint
+                    kickoff_fields = [
+                        field for field in (blueprint.get('kick_off_form') or [])
+                        if field
+                    ]
                     created = self.tallyfy_client.create_blueprint(
                         name=blueprint['name'],
                         description=blueprint['description'],
-                        steps=blueprint['steps']
+                        steps=blueprint['steps'],
+                        prerun=kickoff_fields or None,
                     )
                     
                     template_mapping[f"process:{process['Id']}"] = created['id']
@@ -452,10 +462,15 @@ class KissflowMigrator:
                 blueprint = self.board_transformer.transform_board_to_blueprint(board)
                 
                 if not self.dry_run:
+                    kickoff_fields = [
+                        field for field in (blueprint.get('kick_off_form') or [])
+                        if field
+                    ]
                     created = self.tallyfy_client.create_blueprint(
                         name=blueprint['name'],
                         description=blueprint['description'],
-                        steps=blueprint['steps']
+                        steps=blueprint['steps'],
+                        prerun=kickoff_fields or None,
                     )
                     
                     template_mapping[f"board:{board['Id']}"] = created['id']
@@ -485,10 +500,15 @@ class KissflowMigrator:
                 )
                 
                 if not self.dry_run:
+                    kickoff_fields = [
+                        field for field in (blueprint.get('kick_off_form') or [])
+                        if field
+                    ]
                     created = self.tallyfy_client.create_blueprint(
                         name=blueprint['name'],
                         description=blueprint['description'],
-                        steps=blueprint['steps']
+                        steps=blueprint['steps'],
+                        prerun=kickoff_fields or None,
                     )
                     
                     template_mapping[f"app:{app['Id']}"] = created['id']

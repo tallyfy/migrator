@@ -601,10 +601,15 @@ class AsanaMigrationOrchestrator:
                 
                 if not dry_run:
                     # Create blueprint in Tallyfy
+                    kickoff_fields = [
+                        field for field in (blueprint.get('kick_off_form') or [])
+                        if field
+                    ]
                     created_blueprint = self.tallyfy_client.create_blueprint(
                         name=blueprint['name'],
                         description=blueprint['description'],
-                        steps=blueprint['steps']
+                        steps=blueprint['steps'],
+                        prerun=kickoff_fields or None,
                     )
                     
                     # Save mapping

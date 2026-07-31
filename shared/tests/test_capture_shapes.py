@@ -734,6 +734,8 @@ class TestEveryVendorCanCarryKickOffFields:
 # that never runs would be theatre, so those are tracked on the issue instead
 # of being pinned here.
 WIRED_VENDORS = [
+    ('asana', 'asana/src/main.py'),
+    ('kissflow', 'kissflow/src/main.py'),
     ('monday', 'monday/src/main.py'),
     ('pipefy', 'pipefy/src/main.py'),
     ('process-street', 'process-street/src/main.py'),
