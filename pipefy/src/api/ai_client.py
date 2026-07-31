@@ -162,27 +162,37 @@ class AIClient:
         """Map Pipefy field type to Tallyfy."""
         pipefy_type = context.get('pipefy_type', '').lower()
         
-        # Direct mappings
+        # Direct mappings.
+        #
+        # This dict carried four duplicate "text" keys. Python keeps only the
+        # last, so those slots held distinct Pipefy source types that are now
+        # unrecoverable -- the corruption predates the initial commit (#6).
+        # Deduplicating is a strict no-op: every duplicate had the value 'text',
+        # and unknown types already fall through to 'text' below. Restoring the
+        # lost keys would be a guess; the authoritative Pipefy type table is
+        # FIELD_TYPE_MAPPING in src/transformers/field_transformer.py, which is
+        # what the live path actually uses.
         mappings = {
             'text': 'text',
             'textarea': 'textarea',
-            "text": "text",
             'date': 'date',
             'datetime': 'date',
             'select': 'dropdown',
-            "radio": 'radio',
-            "multiselect": 'multiselect',
-            "text": 'text',
-            "text": 'text',
+            'radio': 'radio',
+            'multiselect': 'multiselect',
             'assignee_select': 'assignees_form',
             'attachment': 'file'
         }
-        
+
         tallyfy_type = mappings.get(pipefy_type, 'text')
-        
+
         return {
             'tallyfy_type': tallyfy_type,
-            'needs_validation': pipefy_type in ["text", "text"],
+            # Same corruption: this list held two distinct types and now holds
+            # one repeated. Membership is unchanged by deduplicating. The key
+            # has no consumer anywhere in the repo, so reconstructing it would
+            # be inventing behaviour nothing reads.
+            'needs_validation': pipefy_type in ['text'],
             'confidence': 0.9 if pipefy_type in mappings else 0.5
         }
     

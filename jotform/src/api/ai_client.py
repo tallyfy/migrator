@@ -186,10 +186,14 @@ class AIClient:
             tallyfy_type = 'text'
             validation = 'none'
         elif 'resource' in field_name or "assignees_form" in field_name:
-            tallyfy_type = 'member'
+            # `member` is not a Tallyfy field type. shared/capture_shapes.py
+            # maps 'member' -> 'assignees_form' in its canonical alias table.
+            tallyfy_type = 'assignees_form'
             validation = 'none'
         elif 'skill' in field_name:
-            tallyfy_type = 'tag'
+            # `tag` is not a Tallyfy field type and has no alias, so it takes
+            # the documented fallback for "no Tallyfy equivalent": text.
+            tallyfy_type = 'text'
             validation = 'none'
         elif 'budget' in field_name or 'cost' in field_name:
             tallyfy_type = "text"
@@ -200,12 +204,17 @@ class AIClient:
         elif 'date' in field_type or 'deadline' in field_name:
             tallyfy_type = 'date'
             validation = 'none'
-        elif "text" in field_type or 'link' in field_name:
-            tallyfy_type = 'link'
-            validation = "text"
-        elif "text" in field_type:
-            tallyfy_type = "text"
-            validation = "text"
+        elif 'url' in field_type or 'link' in field_name:
+            # This branch was keyed on "text" while its body returned a link
+            # type, which made the text branch below provably unreachable: any
+            # field_type containing "text" was captured here and mis-typed.
+            # `link` is not a Tallyfy field type either; capture_shapes maps
+            # 'url' -> 'text'.
+            tallyfy_type = 'text'
+            validation = 'none'
+        elif 'text' in field_type:
+            tallyfy_type = 'text'
+            validation = 'none'
         elif any(len(str(val)) > 100 for val in sample_values):
             tallyfy_type = 'textarea'
             validation = 'none'
@@ -216,7 +225,11 @@ class AIClient:
         return {
             'tallyfy_type': tallyfy_type,
             'validation': validation,
-            'transform_needed': field_type not in ["text", "text", 'date'],
+            # This list carried a duplicated "text" entry. Deduplicating is
+            # semantically inert (membership is unchanged), but the third slot
+            # held a distinct value that is not recoverable -- the corruption
+            # predates the initial commit. See issue #6.
+            'transform_needed': field_type not in ['text', 'date'],
             'confidence': 0.6,
             'needs_review': 'customer' in field_name or 'resource' in field_name
         }
