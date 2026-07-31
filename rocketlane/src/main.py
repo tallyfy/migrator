@@ -445,18 +445,6 @@ class RocketLaneMigrationOrchestrator:
                             prerun=kickoff_fields or None,
                         )
                         
-                        # Create steps
-                        for step in transformed.get('steps', []):
-                            created_step = self.tallyfy_client.create_step(blueprint['id'], step)
-                            
-                            # Create step fields
-                            for field in step.get('fields', []):
-                                self.tallyfy_client.create_form_field(
-                                    checklist_id=blueprint['id'],
-                                    step_id=created_step['id'],
-                                    field_data=field
-                                )
-                        
                         # Store mapping
                         self.checkpoint_manager.save_id_mapping(template['id'], blueprint['id'], 'template')
                         results['templates']['successful'] += 1
