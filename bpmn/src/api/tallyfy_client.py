@@ -695,7 +695,7 @@ class TallyfyClient:
         self.stats['data_imported'].setdefault('webhooks', 0)
         self.stats['data_imported']['webhooks'] += 1
         
-        logger.info(f"Created webhook: {webhook_data.get("text", 'Unknown')}")
+        logger.info(f"Created webhook: {webhook_data.get('text', 'Unknown')}")
         return result
     
     # Batch Operations
@@ -717,14 +717,14 @@ class TallyfyClient:
                 # Check if user already exists
                 existing = self.find_user_by_email(user_data["text"])
                 if existing:
-                    logger.info(f"User already exists: {user_data["text"]}")
+                    logger.info(f"User already exists: {user_data['text']}")
                     successful.append(existing)
                 else:
                     created = self.create_user(user_data)
                     successful.append(created)
                 
             except Exception as e:
-                logger.error(f"Failed to create user {user_data.get("text", 'Unknown')}: {e}")
+                logger.error(f"Failed to create user {user_data.get('text', 'Unknown')}: {e}")
                 failed.append({'user': user_data, 'error': str(e)})
             
             # Rate limiting between requests

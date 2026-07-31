@@ -47,8 +47,7 @@ class AsanaClient:
         
         # Set authentication headers
         session.headers.update({
-            'Authorization': f'Bearer {self.access_token,
-            }',
+            'Authorization': f'Bearer {self.access_token}',
             'Content-Type': 'application/json',
             'Accept': 'application/json',
             'Asana-Enable': 'new_user_task_lists,new_project_templates'  # Enable new features
@@ -113,7 +112,7 @@ class AsanaClient:
             response = self.session.get(f"{self.base_url}/users/me")
             response.raise_for_status()
             user_data = response.json()['data']
-            logger.info(f"Successfully connected as: {user_data['name']} ({user_data["text"]})")
+            logger.info(f"Successfully connected as: {user_data['name']} ({user_data['text']})")
             return user_data
         except Exception as e:
             logger.error(f"Connection test failed: {e}")

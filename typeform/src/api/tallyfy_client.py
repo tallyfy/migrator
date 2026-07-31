@@ -11,6 +11,17 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import json
 
+# The repo root holds the shared package. This module is imported both via
+# `main.py` (which bootstraps the path itself) and directly by tests, so it
+# cannot rely on a caller having done it.
+import os as _os, sys as _sys
+_sys.path.insert(
+    0,
+    _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))),
+)
+from shared.capture_shapes import normalize_captures
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -138,7 +149,8 @@ class TallyfyClient:
     
     # Template/Checklist Management
     def create_checklist(self, name: str, description: str = '',
-                        steps: List[Dict] = None) -> Dict[str, Any]:
+                        steps: List[Dict] = None,
+                        prerun: List[Dict] = None) -> Dict[str, Any]:
         """
         Create a checklist (template)
         
@@ -159,6 +171,12 @@ class TallyfyClient:
             'is_template': True
         }
         
+        # Kick-off fields ride a `prerun` array on this create body. api-v2
+        # serves no `preruns` store route, so they cannot be added afterwards --
+        # if they are not here, they are never created at all.
+        if prerun:
+            data['prerun'] = self.build_prerun_fields(prerun)
+
         checklist = self._make_request('POST', '/checklists', json=data)
         
         # Add steps if provided
@@ -181,8 +199,9 @@ class TallyfyClient:
         }
         
         # Add form fields if present
-        if 'fields' in step_data:
-            data['captures'] = self._transform_fields(step_data['fields'])
+        fields = step_data.get('fields') or step_data.get('form_fields')
+        if fields:
+            data['captures'] = normalize_captures(self._transform_fields(fields))
         
         return self._make_request('POST', f'/checklists/{checklist_id}/steps', json=data)
     
@@ -231,15 +250,18 @@ class TallyfyClient:
         
         return captures
     
-    def add_kickoff_form(self, checklist_id: str, fields: List[Dict]) -> Dict[str, Any]:
-        """Add kick-off form fields to a checklist"""
-        prerun_fields = self._transform_fields(fields)
-        
-        for field in prerun_fields:
-            field['class_id'] = checklist_id  # Link to checklist, not step
-            self._make_request('POST', f'/checklists/{checklist_id}/preruns', json=field)
-        
-        return {'success': True, 'fields_added': len(prerun_fields)}
+    @staticmethod
+    def build_prerun_fields(captures: Any) -> List[Dict[str, Any]]:
+        """
+        Normalise kick-off fields for a checklist's ``prerun`` array.
+
+        api-v2 serves no ``preruns`` store route: kick-off fields are sent as a
+        ``prerun`` array on the checklist itself, accepted by
+        ``POST /organizations/{org}/checklists`` and
+        ``PUT /organizations/{org}/checklists/{id}``. Each entry obeys the same
+        capture rules as a step field.
+        """
+        return normalize_captures(captures)
     
     # Process/Run Management
     @staticmethod

@@ -85,7 +85,8 @@ class ProcessStreetClient:
         try:
             # Try to get current user
             response = self._make_request('GET', '/users/me')
-            logger.info(f"API key validated. User: {response.get('data', {}).get('attributes', {}).get("text", 'Unknown')}")
+            attributes = response.get('data', {}).get('attributes', {})
+            logger.info(f"API key validated. User: {attributes.get('email', 'Unknown')}")
         except Exception as e:
             logger.error(f"Invalid API key or connection error: {e}")
             raise ValueError(f"Failed to validate Process Street API key: {e}")
@@ -834,10 +835,11 @@ class ProcessStreetClient:
         # Check API access
         try:
             user = self.get_current_user()
+            user_email = user.get('attributes', {}).get('email', 'Unknown')
             readiness['checks'].append({
                 'name': 'API Access',
                 'status': 'passed',
-                'details': f"Authenticated as {user.get('attributes', {}).get("text", 'Unknown')}"
+                'details': f"Authenticated as {user_email}"
             })
         except Exception as e:
             readiness['ready'] = False

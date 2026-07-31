@@ -41,6 +41,35 @@ jobs:
           fi
           echo "No undefined names."
 
+  # Every vendor README and requirements.txt declares "Python 3.8+". CI only ever
+  # ran 3.12, and PEP 701 (3.12) legalised quote reuse and newlines inside f-string
+  # expressions -- so ten files that are SyntaxErrors on the entire declared support
+  # range compiled clean here and shipped. Seven of seventeen vendors could not be
+  # imported at all on 3.8-3.11, and two of them were sending a mangled auth header
+  # that no test could have caught because the module still parsed on 3.12.
+  #
+  # Compile on the OLDEST supported version, not the newest. This is the gate that
+  # was missing.
+  declared-floor:
+    name: compiles on the declared Python floor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.9'
+      - name: Byte-compile every file on 3.9
+        run: |
+          fails=0
+          for f in $(git ls-files '*.py'); do
+            python -m py_compile "$f" || { echo "::error file=$f::does not compile on Python 3.9"; fails=$((fails+1)); }
+          done
+          if [ "$fails" -ne 0 ]; then
+            echo "::error::$fails file(s) fail on the declared Python floor"
+            exit 1
+          fi
+          echo "All files compile on Python 3.9."
+
   # Byte-compiles every file. Catches syntax errors in vendors that have no tests.
   compile:
     name: compileall

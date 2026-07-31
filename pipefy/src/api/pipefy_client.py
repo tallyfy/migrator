@@ -71,8 +71,7 @@ class PipefyClient:
         
         self.session = requests.Session()
         self.session.headers.update({
-            'Authorization': f'Bearer {api_token,
-            }',
+            'Authorization': f'Bearer {api_token}',
             'Content-Type': 'application/json'
         })
         

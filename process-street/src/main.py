@@ -301,14 +301,14 @@ class MigrationOrchestrator:
                 existing = self.tallyfy_client.find_user_by_email(tallyfy_user["text"])
                 
                 if existing:
-                    logger.debug(f"User already exists: {tallyfy_user["text"]}")
+                    logger.debug(f"User already exists: {tallyfy_user['text']}")
                     # Update ID mapping
                     self.id_mapper.add_mapping(ps_user['id'], existing['id'], 'user')
                     successful += 1
                 else:
                     # Create user in Tallyfy
                     created = self.tallyfy_client.create_user(tallyfy_user)
-                    logger.debug(f"Created user: {tallyfy_user["text"]}")
+                    logger.debug(f"Created user: {tallyfy_user['text']}")
                     successful += 1
                 
             except Exception as e:

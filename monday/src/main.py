@@ -406,7 +406,20 @@ class MondayMigrator:
                     if not self.dry_run:
                         # Create blueprint
                         logger.info(f"    Creating blueprint: {blueprint['name']}")
-                        created_blueprint = self.tallyfy.create_blueprint(blueprint)
+                        # Pass the fields by name. Handing the whole dict to a
+                        # positional `name` parameter bound the blueprint itself
+                        # as the title and sent an empty `steps` list, so every
+                        # step, tag and kick-off field was dropped on the wire.
+                        kickoff_fields = [
+                            field for field in (blueprint.get('kick_off_form') or [])
+                            if field
+                        ]
+                        created_blueprint = self.tallyfy.create_blueprint(
+                            name=blueprint['name'],
+                            description=blueprint.get('description', ''),
+                            steps=blueprint.get('steps'),
+                            prerun=kickoff_fields or None,
+                        )
                         
                         # Map board to blueprint
                         self.id_mapper.add_mapping(

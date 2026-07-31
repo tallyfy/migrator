@@ -640,3 +640,145 @@ class TestKickOffFieldsRideTheChecklistPayload:
         assert "create_capture(" not in source, (
             f'{vendor} still calls create_capture, which targets a dead route'
         )
+
+
+# ---------------------------------------------------------------------------
+# Repo-wide kick-off delivery gate
+# ---------------------------------------------------------------------------
+#
+# The two tests above pinned pipefy and process-street. Everyone else was
+# unpinned, and everyone else was broken -- in three distinct ways:
+#
+#   1. Eleven clients define `add_kickoff_form`, which POSTs to
+#      `/checklists/{id}/preruns`. That route does not exist, and the method
+#      has zero callers in any orchestrator. It is dead code pointing at a
+#      dead route, and its presence is why the gap looked "nearly done".
+#
+#   2. Those same eleven expose `create_checklist(name, description, steps)`
+#      -- three positional parameters that build a fixed six-key body inside
+#      the method. There is no parameter a kick-off array could travel in, so
+#      the fix is not a call-site change; the signature itself forecloses it.
+#
+#   3. asana, kissflow and monday have no `create_checklist` at all. They call
+#      `create_blueprint`, which DOES take a `kick_off_form` argument -- but no
+#      orchestrator passes it, and `kick_off_form` is not the key the API
+#      reads. Their template transformers build the kick-off form and then it
+#      is dropped on the floor.
+#
+# So: every vendor except pipefy and process-street builds kick-off fields and
+# delivers none of them.
+
+ALL_VENDORS = [
+    'asana', 'basecamp', 'bpmn', 'clickup', 'cognito-forms', 'google-forms',
+    'jotform', 'kissflow', 'monday', 'nextmatter', 'pipefy', 'process-street',
+    'rocketlane', 'surveymonkey', 'trello', 'typeform', 'wrike',
+]
+
+
+class TestNoVendorTargetsTheDeadPrerunsRoute:
+    """`POST /checklists/{id}/preruns` is not a route api-v2 serves."""
+
+    @pytest.mark.parametrize('vendor', ALL_VENDORS)
+    def test_add_kickoff_form_is_gone(self, vendor):
+        path = os.path.join(REPO_ROOT, vendor, 'src', 'api', 'tallyfy_client.py')
+        if not os.path.exists(path):
+            pytest.skip(f'{vendor} has no tallyfy_client.py')
+        with open(path) as handle:
+            source = handle.read()
+
+        assert 'def add_kickoff_form' not in source, (
+            f'{vendor} still defines add_kickoff_form, which POSTs to the '
+            f'non-existent /checklists/{{id}}/preruns route. Kick-off fields '
+            f'ride a `prerun` array on the checklist create body instead.'
+        )
+
+    @pytest.mark.parametrize('vendor', ALL_VENDORS)
+    def test_no_client_posts_to_a_preruns_path(self, vendor):
+        path = os.path.join(REPO_ROOT, vendor, 'src', 'api', 'tallyfy_client.py')
+        if not os.path.exists(path):
+            pytest.skip(f'{vendor} has no tallyfy_client.py')
+        with open(path) as handle:
+            source = handle.read()
+
+        assert '/preruns' not in source, (
+            f'{vendor} references a /preruns path; no such route exists'
+        )
+
+
+class TestEveryVendorCanCarryKickOffFields:
+    """A client whose signature cannot accept `prerun` can never deliver one."""
+
+    @pytest.mark.parametrize('vendor', ALL_VENDORS)
+    def test_the_template_creator_accepts_a_prerun_array(self, vendor):
+        path = os.path.join(REPO_ROOT, vendor, 'src', 'api', 'tallyfy_client.py')
+        if not os.path.exists(path):
+            pytest.skip(f'{vendor} has no tallyfy_client.py')
+        with open(path) as handle:
+            source = handle.read()
+
+        assert 'def build_prerun_fields' in source, (
+            f'{vendor} cannot normalise kick-off fields into the shape '
+            f'CreateCaptureRequest accepts'
+        )
+        assert "'prerun'" in source or '"prerun"' in source, (
+            f'{vendor} never names the `prerun` key, so whatever its template '
+            f'transformer builds is dropped before the request is sent'
+        )
+
+
+# Vendors whose orchestrator reaches a live template-creation call. The rest
+# either have that call commented out (basecamp, clickup, cognito-forms,
+# google-forms, jotform, nextmatter, trello, wrike -- all eight reference
+# `create_template`, a method that exists nowhere in this repo) or call other
+# methods that do not exist (bpmn, rocketlane). Wiring a `prerun` into a call
+# that never runs would be theatre, so those are tracked on the issue instead
+# of being pinned here.
+WIRED_VENDORS = [
+    ('asana', 'asana/src/main.py'),
+    ('kissflow', 'kissflow/src/main.py'),
+    ('monday', 'monday/src/main.py'),
+    ('pipefy', 'pipefy/src/main.py'),
+    ('process-street', 'process-street/src/main.py'),
+    ('rocketlane', 'rocketlane/src/main.py'),
+    ('surveymonkey', 'surveymonkey/src/main.py'),
+    ('typeform', 'typeform/src/main.py'),
+]
+
+
+class TestWiredOrchestratorsActuallySendKickOffFields:
+    """A client that CAN carry `prerun` still delivers nothing unless asked to.
+
+    The repo-wide gate above only inspects `tallyfy_client.py`. It went green
+    while all seventeen orchestrators still created templates with no kick-off
+    fields at all -- which is exactly the shape of the original bug.
+    """
+
+    @pytest.mark.parametrize('vendor,source_file', WIRED_VENDORS)
+    def test_kick_off_fields_reach_the_create_call(self, vendor, source_file):
+        with open(os.path.join(REPO_ROOT, source_file)) as handle:
+            source = handle.read()
+
+        sends_prerun = "prerun=" in source or "['prerun']" in source
+        assert sends_prerun, (
+            f'{vendor} creates a template without passing kick-off fields, so '
+            f'they are never created and every kick-off value at launch has '
+            f'nothing to resolve against'
+        )
+
+    @pytest.mark.parametrize('vendor,source_file', WIRED_VENDORS)
+    def test_the_whole_blueprint_is_not_passed_as_the_title(self, vendor, source_file):
+        """Regression: two orchestrators handed the blueprint dict to a
+        positional `name` parameter.
+
+        monday sent `{'name': <the entire blueprint>, 'steps': []}`, dropping
+        every step and field; typeform's client then sliced that dict
+        (`name[:250]`), so its template creation could never succeed at all.
+        """
+        with open(os.path.join(REPO_ROOT, source_file)) as handle:
+            source = handle.read()
+
+        for bad in ('create_checklist(blueprint)', 'create_blueprint(blueprint)'):
+            assert bad not in source, (
+                f'{vendor} passes the whole blueprint dict into a positional '
+                f'`name` parameter'
+            )

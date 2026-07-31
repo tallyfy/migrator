@@ -122,22 +122,37 @@ keying by it returns 201 with `prerun: {}` and every value lost.
 Pass `strict=True` on live paths. A dropped key is invisible -- the launch still returns
 201 -- so a silent encoder is silent data loss.
 
-### ⚠️ Known gap: templates are created WITHOUT kick-off fields
+### Kick-off field creation (fixed 2026-07; read this before touching a client)
 
-**No vendor currently creates kick-off fields on a Tallyfy template.** Every template is
-created with an empty `prerun` array, so there is nothing for launch values to key against.
+Kick-off fields are created by attaching a `prerun` array to the checklist **create
+body**. There is no route to add them afterwards, so if they are not on that request
+they are never created, and every launch value then has nothing to key against.
 
-- `add_kickoff_form()` exists in 11 vendor clients (e.g. `typeform/src/api/tallyfy_client.py:234`,
-  POSTing to `/checklists/{id}/preruns`) and has **zero callers**. It looks like the intended
-  implementation, never wired into any orchestrator.
-- `create_checklist()` POSTs only `{id,title,summary,organization_id,status,is_template}`.
-  The `kickoff_form` dict that template transformers build is silently dropped.
-- Step `captures` (form fields on a step) ARE created. Those are a different thing from
-  template-level kick-off fields -- do not conflate them.
+Every vendor client exposes `build_prerun_fields(captures)` (delegating to
+`shared/capture_shapes.normalize_captures`) and accepts `prerun=` on its template
+creator. Two shapes exist: `create_checklist(checklist_data: Dict)` in bpmn, pipefy
+and process-street (the whole dict becomes the request json); and
+`create_checklist(name, description, steps, prerun)` / `create_blueprint(...)`
+elsewhere.
 
-Until `add_kickoff_form` is wired, the instance/launch phase for a form vendor will
-correctly raise `NoKickoffFieldsDefined` rather than launch processes whose kick-off data
-would be discarded. Fixing that is the prerequisite for kick-off data migrating at all.
+What this replaced: eleven clients defined `add_kickoff_form`, POSTing to
+`/checklists/{id}/preruns` -- a route api-v2 does not serve -- with **zero callers**;
+those same eleven took three positional parameters and built a fixed six-key body
+inside the method, so no kick-off array could travel in at all. asana, kissflow and
+monday instead took a `kick_off_form` argument, which is not the key the API reads and
+which no orchestrator ever passed.
+
+Step `captures` (form fields on a step) ARE created and are a different thing from
+template-level kick-off fields -- do not conflate them.
+
+**Still open (#3): eight vendors never reach a create call.** basecamp, clickup,
+cognito-forms, google-forms, jotform, nextmatter, trello and wrike have theirs
+commented out, every one referencing `create_template` -- a method that exists nowhere
+in this repo. bpmn calls the same absent method. Their clients can now carry a
+`prerun`, but nothing hands them one, so kick-off data still does not migrate for
+those nine. `shared/tests/test_capture_shapes.py` gates both halves separately: a
+repo-wide client gate over all 17 vendors, and an orchestrator gate over the eight
+that reach a live create call.
 
 `shared/tests/test_prerun_request_key.py` pins the request key across every vendor client.
 `shared/tests/test_prerun_wiring.py` pins that the encoder is actually REACHED on live

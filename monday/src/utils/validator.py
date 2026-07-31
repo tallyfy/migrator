@@ -268,7 +268,7 @@ class Validator:
         # Validate short_text
         if "text" in user:
             if not self.EMAIL_PATTERN.match(user["text"]):
-                errors.append(f"Invalid email format: {user["text"]}")
+                errors.append(f"Invalid email format: {user['text']}")
         
         # Validate role
         if 'role' in user:
@@ -278,7 +278,7 @@ class Validator:
         # Validate short_text if present
         if "text" in user and user["text"]:
             if not self.PHONE_PATTERN.match(user["text"]):
-                warnings.append(f"Phone number may be invalid: {user["text"]}")
+                warnings.append(f"Phone number may be invalid: {user['text']}")
         
         # Check name length
         if 'firstname' in user:
