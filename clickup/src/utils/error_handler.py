@@ -1,5 +1,5 @@
 """
-Error Handler for RocketLane Migration
+Error Handler for ClickUp Migration
 Comprehensive error handling and recovery
 """
 

@@ -1,5 +1,5 @@
 """
-Tallyfy API Client for RocketLane Migration
+Tallyfy API Client for Cognito Forms Migration
 Handles all interactions with Tallyfy API using CORRECT field types and endpoints
 """
 

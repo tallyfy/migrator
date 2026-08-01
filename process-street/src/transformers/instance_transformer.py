@@ -1,5 +1,5 @@
 """
-Instance Transformer for RocketLane to Tallyfy Migration
+Instance Transformer for Process Street to Tallyfy Migration
 Handles active project to process conversion with state preservation
 """
 
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class InstanceTransformer:
-    """Transform RocketLane project instances to Tallyfy processes"""
+    """Transform Process Street project instances to Tallyfy processes"""
     
     def __init__(self, ai_client=None):
         """
@@ -43,12 +43,12 @@ class InstanceTransformer:
                          kickoff_fields: Optional[List[Dict[str, Any]]] = None
                          ) -> Dict[str, Any]:
         """
-        Transform a RocketLane project to Tallyfy process
+        Transform a Process Street project to Tallyfy process
         
         Args:
-            project: RocketLane project instance
-            template_mapping: Mapping of RocketLane template IDs to Tallyfy blueprint IDs
-            user_mapping: Mapping of RocketLane user IDs to Tallyfy user IDs
+            project: Process Street project instance
+            template_mapping: Mapping of Process Street template IDs to Tallyfy blueprint IDs
+            user_mapping: Mapping of Process Street user IDs to Tallyfy user IDs
             kickoff_fields: The Tallyfy template's kick-off field definitions.
                 Supply these so kick-off values are keyed by timeline_id and
                 encoded per field type -- without them the API discards them.
@@ -67,7 +67,7 @@ class InstanceTransformer:
             'name': project_name[:250],
             'description': self._build_process_description(project),
             'metadata': {
-                'source': 'rocketlane',
+                'source': 'process_street',
                 'original_id': project.get('id'),
                 'customer_id': project.get('customer_id'),
                 'created_at': project.get('created_at'),
@@ -323,7 +323,7 @@ class InstanceTransformer:
             return 'task'
     
     def _map_task_status(self, status: str) -> str:
-        """Map RocketLane task status to Tallyfy status"""
+        """Map Process Street task status to Tallyfy status"""
         status_map = {
             'not_started': 'pending',
             'in_progress': 'in_progress',

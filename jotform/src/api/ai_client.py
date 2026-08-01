@@ -1,5 +1,5 @@
 """
-AI Client for RocketLane to Tallyfy Migration
+AI Client for Jotform to Tallyfy Migration
 Provides intelligent decision-making for complex transformations
 """
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class AIClient:
-    """AI-powered decision maker for RocketLane migration challenges"""
+    """AI-powered decision maker for Jotform migration challenges"""
     
     def __init__(self, api_key: Optional[str] = None):
         """Initialize AI client with optional API key"""
@@ -144,7 +144,7 @@ class AIClient:
         has_conditions = context.get('has_conditions', False)
         is_customer_facing = context.get('is_customer_facing', False)
         
-        # RocketLane-specific thresholds (lower due to customer focus)
+        # Jotform-specific thresholds (lower due to customer focus)
         if field_count <= 15 and not has_conditions:
             strategy = 'simple_kickoff'
             reasoning = 'Simple form suitable for kick-off'
@@ -181,7 +181,7 @@ class AIClient:
         field_name = context.get('field_name', '').lower()
         sample_values = context.get('sample_values', [])
         
-        # RocketLane-specific field patterns
+        # Jotform-specific field patterns
         if 'customer' in field_name or 'client' in field_name:
             tallyfy_type = 'text'
             validation = 'none'
