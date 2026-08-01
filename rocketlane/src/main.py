@@ -231,12 +231,12 @@ class RocketLaneMigrationOrchestrator:
         try:
             # Fetch customers
             logger.info("Fetching customers...")
-            discovery['customers'] = self.rocketlane_client.list_customers()
+            discovery['customers'] = self.rocketlane_client.get_customers()
             discovery['counts']['customers'] = len(discovery['customers'])
             
             # Fetch projects
             logger.info("Fetching projects...")
-            discovery['projects'] = self.rocketlane_client.list_projects(
+            discovery['projects'] = self.rocketlane_client.get_projects(
                 include_archived=os.getenv('MIGRATE_ARCHIVED', 'false').lower() == 'true'
             )
             discovery['counts']['projects'] = len(discovery['projects'])
@@ -244,22 +244,22 @@ class RocketLaneMigrationOrchestrator:
             
             # Fetch project templates
             logger.info("Fetching project templates...")
-            discovery['templates'] = self.rocketlane_client.list_project_templates()
+            discovery['templates'] = self.rocketlane_client.get_project_templates()
             discovery['counts']['templates'] = len(discovery['templates'])
             
             # Fetch forms and surveys
             logger.info("Fetching forms and surveys...")
-            discovery['forms'] = self.rocketlane_client.list_forms()
+            discovery['forms'] = self.rocketlane_client.get_forms()
             discovery['counts']['forms'] = len(discovery['forms'])
             
             # Fetch users and resources
             logger.info("Fetching users and resources...")
-            discovery['users'] = self.rocketlane_client.list_users()
+            discovery['users'] = self.rocketlane_client.get_users()
             discovery['counts']['users'] = len(discovery['users'])
             
             # Fetch custom fields
             logger.info("Fetching custom fields...")
-            discovery['custom_fields'] = self.rocketlane_client.list_custom_fields()
+            discovery['custom_fields'] = self.rocketlane_client.get_custom_fields()
             discovery['counts']['custom_fields'] = len(discovery['custom_fields'])
             
             # Analyze paradigm shifts needed
@@ -541,7 +541,7 @@ class RocketLaneMigrationOrchestrator:
                     
                     try:
                         # Get full project details
-                        full_project = self.rocketlane_client.get_project(project['id'])
+                        full_project = self.rocketlane_client.get_project_details(project['id'])
 
                         # Resolve the target template FIRST: transforming the
                         # project needs the template's kick-off field definitions
@@ -579,32 +579,14 @@ class RocketLaneMigrationOrchestrator:
                             prerun_data=transformed.get('prerun', {})
                         )
                         
-                        # Migrate task states
-                        for task in full_project.get('tasks', []):
-                            results['tasks']['total'] += 1
-                            try:
-                                if task.get('completed'):
-                                    # Mark task as complete
-                                    self.tallyfy_client.complete_task(
-                                        run_id=created_process['id'],
-                                        task_id=task['id'],
-                                        data={'completed_by': self._get_user_mapping(task.get('completed_by'))}
-                                    )
-                                
-                                # Update assignees
-                                if task.get('assignees'):
-                                    assignee_ids = [self._get_user_mapping(a) for a in task['assignees']]
-                                    self.tallyfy_client.update_task_assignees(
-                                        run_id=created_process['id'],
-                                        task_id=task['id'],
-                                        assignee_ids=assignee_ids
-                                    )
-                                
-                                results['tasks']['successful'] += 1
-                                
-                            except Exception as e:
-                                logger.error(f"Failed to migrate task {task.get('name')}: {e}")
-                                results['tasks']['failed'] += 1
+                        # Task-state migration is disabled: the loop body
+                        # uses Rocketlane ids as Tallyfy task ids (no mapping
+                        # exists), passes an unsupported `data=` kwarg to
+                        # complete_task, checks a non-existent `completed`
+                        # flag, and calls update_task_assignees which is not
+                        # implemented.  Re-enable once proper task-id mapping
+                        # and correct Tallyfy calls are in place.
+                        # tasks = self.rocketlane_client.get_tasks(project['id'])
                         
                         # Migrate time tracking if enabled
                         if os.getenv('MIGRATE_TIME_TRACKING', 'true').lower() == 'true':
@@ -835,8 +817,7 @@ class RocketLaneMigrationOrchestrator:
             'dry_run': dry_run,
             'phases': results,
             'statistics': {
-                'total_api_calls': self.rocketlane_client.get_stats()['api_calls'] + 
-                                 self.tallyfy_client.get_stats()['api_calls'],
+                'tallyfy_resources': self.tallyfy_client.get_statistics(),
                 'ai_decisions': sum(len(r.get('ai_decisions', [])) for r in results.values()),
                 'errors': self.error_handler.get_error_count()
             },

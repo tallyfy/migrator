@@ -181,24 +181,25 @@ class GoogleFormsMigrationOrchestrator(FormMigratorBase):
             
             # Discover forms
             logger.info("Discovering forms...")
-            discovery_data['forms'] = self.google_forms_client.list_forms()
+            discovery_data['forms'] = self.google_forms_client.get_forms()
             
             # Get detailed form data and sample responses
             for form in discovery_data['forms'][:10]:  # Sample first 10 forms
                 try:
+                    form_id = form['id']
                     # Get form details
-                    form_details = self.google_forms_client.get_form(form['formId'])
+                    form_details = self.google_forms_client.get_form(form_id)
                     form.update(form_details)
                     
                     # Get sample responses
-                    responses = self.google_forms_client.list_responses(form['formId'], limit=5)
+                    responses = self.google_forms_client.list_responses(form_id, limit=5)
                     for response in responses:
-                        response['form_id'] = form['formId']
+                        response['form_id'] = form_id
                         response['form_title'] = form.get('info', {}).get('title', '')
                     discovery_data['responses'].extend(responses)
                     
                 except Exception as e:
-                    logger.warning(f"Could not get details for form {form.get('formId')}: {e}")
+                    logger.warning(f"Could not get details for form {form.get('id')}: {e}")
             
             # Calculate statistics
             discovery_data['statistics'] = {

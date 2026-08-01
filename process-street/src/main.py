@@ -298,17 +298,17 @@ class MigrationOrchestrator:
                 tallyfy_user = self.user_transformer.transform(ps_user)
                 
                 # Check if user exists
-                existing = self.tallyfy_client.find_user_by_email(tallyfy_user["text"])
+                existing = self.tallyfy_client.find_user_by_email(tallyfy_user['email'])
                 
                 if existing:
-                    logger.debug(f"User already exists: {tallyfy_user['text']}")
+                    logger.debug(f"User already exists: {tallyfy_user['email']}")
                     # Update ID mapping
                     self.id_mapper.add_mapping(ps_user['id'], existing['id'], 'user')
                     successful += 1
                 else:
                     # Create user in Tallyfy
                     created = self.tallyfy_client.create_user(tallyfy_user)
-                    logger.debug(f"Created user: {tallyfy_user['text']}")
+                    logger.debug(f"Created user: {tallyfy_user['email']}")
                     successful += 1
                 
             except Exception as e:

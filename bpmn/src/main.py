@@ -211,7 +211,7 @@ class BPMNMigrationOrchestrator:
                 for template in templates:
                     try:
                         # Create template in Tallyfy
-                        created = self.tallyfy_client.create_template(template)
+                        created = self.tallyfy_client.create_checklist(template)
                         logger.info(f"Created template in Tallyfy: {created['id']}")
                         
                         # Update results

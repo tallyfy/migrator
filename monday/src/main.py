@@ -307,7 +307,15 @@ class MondayMigrator:
                         if not self.dry_run:
                             # Create user
                             logger.info(f"  Creating user: {email}")
-                            created_user = self.tallyfy.create_user(tallyfy_member)
+                            # create_user() does not exist on this client;
+                            # create_member() does, and it takes discrete
+                            # arguments rather than the whole dict.
+                            created_user = self.tallyfy.create_member(
+                                email=tallyfy_member["text"],
+                                first_name=tallyfy_member.get('firstname', ''),
+                                last_name=tallyfy_member.get('lastname', ''),
+                                role=tallyfy_member.get('role', 'member')
+                            )
                             self.id_mapper.add_mapping(
                                 'user',
                                 monday_user['id'],

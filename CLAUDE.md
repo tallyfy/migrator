@@ -148,11 +148,77 @@ template-level kick-off fields -- do not conflate them.
 **Still open (#3): eight vendors never reach a create call.** basecamp, clickup,
 cognito-forms, google-forms, jotform, nextmatter, trello and wrike have theirs
 commented out, every one referencing `create_template` -- a method that exists nowhere
-in this repo. bpmn calls the same absent method. Their clients can now carry a
+in this repo (0 of 17 clients define it; the real name is `create_checklist`, 14/17).
+bpmn called the same absent method and is fixed. Their clients can now carry a
 `prerun`, but nothing hands them one, so kick-off data still does not migrate for
-those nine. `shared/tests/test_capture_shapes.py` gates both halves separately: a
+those eight. `shared/tests/test_capture_shapes.py` gates both halves separately: a
 repo-wide client gate over all 17 vendors, and an orchestrator gate over the eight
 that reach a live create call.
+
+Uncommenting those lines would not help on its own. Every one of the eight also
+had a constructor that could not bind (fixed, #15), six have discovery stubs that
+return `[]`, and the shared `template_transformer` reads only `steps`/`tasks` --
+which the constructed dicts do not contain -- so they would POST empty templates.
+
+## The corruption class: a mass rename that nothing could see
+
+One find-replace to `"text"` ran across this repo before its initial commit, and
+because there was no CI at all it survived everywhere. It is not one bug, it is a
+shape, and it keeps turning up in new syntax. Every gate added for it found live
+bugs the first time its scope was widened -- so when you find an instance, widen
+before you conclude you are done.
+
+| Syntax | What collapsed | Gate |
+|---|---|---|
+| `f'Bearer {token,}'` | trailing comma made a tuple; every call 401d | `test_ai_fallback_field_types.py` |
+| `elif "text" in ft:` after an identical branch | unreachable branch, so `link` typed everything | same |
+| `x in ["text", "text", 'date']` | a distinct third value overwritten | `TestNoCollapsedMembershipTests` |
+| `{'text': .., 'text': ..}` | **Python keeps only the last key**, so that source type has NO mapping | `TestNoCollapsedDictKeys` |
+| `{'text': <the email>}` posted verbatim | user created with no email address | `test_user_payload_keys.py` |
+
+The dict case is the worst, because those are the field-type maps that decide what
+every migrated field becomes, and the evidence for what was lost is usually in the
+same file (a sibling `FIELD_VALIDATIONS` keyed by the same column type, a surviving
+`# With URL validation` comment, or the vendor's own README).
+
+**`text` is not universally wrong.** It is the correct internal key when the caller
+unpacks the dict -- `create_member(email=member["text"], ...)` -- and wrong only when
+the whole dict is POSTed (`create_user(user_data)` does `json=user_data`). The first
+version of that gate flagged both and would have "fixed" two working migrators into
+breakage. Check how the caller sends it before changing a key.
+
+## Gates that exist, and two rules about writing them
+
+`shared/tests/` holds the repo-wide gates. Beyond the prerun/capture ones above:
+
+- `test_client_construction.py` -- every `SomeClient(...)` in a `main.py` must bind.
+  Nothing imports a `main.py`, so no test ever executed those lines, and both
+  `py_compile` and pyflakes pass: the calls are syntactically fine and every name in
+  them is defined. They were wrong only at bind time, and 13 of them raised
+  `TypeError` before phase 1.
+- `test_no_ghost_methods.py` -- a method called on a client must exist. A **ratchet**:
+  `KNOWN_MISSING` inventories the ~62 that need code written from vendor API docs, and
+  a second test fails if a listed entry starts resolving, so the list cannot rot.
+- `test_independence_rule.py` -- no migrator may name another vendor.
+- `test_base_url_consistency.py` -- one client, one URL shape.
+
+**Rule 1: resolve classes through `main.py`'s imports, never by scanning files.**
+`process-street` defines `ProcessStreetClient` twice with different signatures.
+Resolving by `glob` order made a gate pass on macOS and fail on CI on identical
+code, inventing a bug that did not exist. A gate whose verdict depends on directory
+ordering is worse than no gate.
+
+**Rule 2: a green PR proves nothing about the merged result.** Two PRs in one
+session were each green alone and turned `main` red together (a comment added by one
+named a vendor the other's new gate forbade). CI only ever sees one branch. When
+several PRs touch one file family, run the suite on the merged tree before declaring
+done.
+
+Cursor Bugbot reviews each push and can push Autofix commits of its own -- reconcile
+by merge, never force-push, and verify each finding against the source before
+adopting it. It has been right about real bugs here (a doubled `/api` in an env file,
+a client returning the wrong user shape) and has also had to revert its own commit
+after it turned a dead loop into an executing broken one.
 
 `shared/tests/test_prerun_request_key.py` pins the request key across every vendor client.
 `shared/tests/test_prerun_wiring.py` pins that the encoder is actually REACHED on live

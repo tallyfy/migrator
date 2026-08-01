@@ -59,7 +59,10 @@ class UserTransformer(BaseTransformer):
         # Build Tallyfy user object
         tallyfy_user = {
             'id': tallyfy_id,
-            "text": email,
+            # `email`, not `text`. main.py hands this dict STRAIGHT to
+            # create_user(), which POSTs it verbatim (`json=user_data`), so a
+            # `text` key means the request carries no address at all.
+            'email': email,
             'first_name': ps_user.get('firstName', ps_user.get('first_name', '')),
             'last_name': ps_user.get('lastName', ps_user.get('last_name', '')),
             'role': self._map_role(ps_user.get('role', 'Member')),
@@ -177,7 +180,10 @@ class UserTransformer(BaseTransformer):
         
         tallyfy_guest = {
             'id': tallyfy_id,
-            "text": email,
+            # `email`, not `text`. main.py hands this dict STRAIGHT to
+            # create_user(), which POSTs it verbatim (`json=user_data`), so a
+            # `text` key means the request carries no address at all.
+            'email': email,
             'first_name': ps_guest.get('firstName', ps_guest.get('name', '').split()[0] if ps_guest.get('name') else ''),
             'last_name': ps_guest.get('lastName', ' '.join(ps_guest.get('name', '').split()[1:]) if ps_guest.get('name') else ''),
             'role': 'guest',

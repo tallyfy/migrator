@@ -343,7 +343,7 @@ class PipefyMigrationOrchestrator:
         logger.info("Migrating users...")
         
         # Get organization members
-        members = self.pipefy_client.get_organization_members()
+        members = self.pipefy_client.list_users()
         logger.info(f"Found {len(members)} users to migrate")
         
         if dry_run:
@@ -355,32 +355,35 @@ class PipefyMigrationOrchestrator:
         
         for member in self.progress.track(members, description="Migrating users"):
             try:
-                user = member.get('user', {})
-                
-                # Transform user
+                # list_users() already flattens each member into a user dict
+                # with top-level keys: email, name, username, id, role.
                 tallyfy_user = {
-                    # Pipefy returns the address under `email` (see the members
-                    # query in pipefy_client.py:284).
-                    "text": user.get('email'),
-                    'first_name': user.get('name', '').split()[0] if user.get('name') else '',
-                    'last_name': ' '.join(user.get('name', '').split()[1:]) if user.get('name') else '',
-                    'username': user.get('username'),
-                    'external_ref': user.get('id'),
-                    'role': member.get('role_name', 'member')
+                    # `email`, not `text`. create_user() POSTs this dict
+                    # VERBATIM (tallyfy_client.py: `json=user_data`), so a
+                    # `text` key means the request carries no email at all --
+                    # and its success log reads
+                    # user_data.get('email', user_data.get('first_name')),
+                    # so it silently printed "Created user: Jane" instead.
+                    'email': member.get('email'),
+                    'first_name': member.get('name', '').split()[0] if member.get('name') else '',
+                    'last_name': ' '.join(member.get('name', '').split()[1:]) if member.get('name') else '',
+                    'username': member.get('username'),
+                    'external_ref': member.get('id'),
+                    'role': member.get('role', 'member')
                 }
                 
                 # Check if user exists
-                existing = self.tallyfy_client.find_user_by_email(tallyfy_user["text"])
+                existing = self.tallyfy_client.find_user_by_email(tallyfy_user['email'])
                 
                 if existing:
-                    logger.debug(f"User already exists: {tallyfy_user['text']}")
-                    self.id_mapper.add_mapping(user['id'], existing['id'], 'user')
+                    logger.debug(f"User already exists: {tallyfy_user['email']}")
+                    self.id_mapper.add_mapping(member['id'], existing['id'], 'user')
                     successful += 1
                 else:
                     # Create user in Tallyfy
                     created = self.tallyfy_client.create_user(tallyfy_user)
-                    logger.debug(f"Created user: {tallyfy_user['text']}")
-                    self.id_mapper.add_mapping(user['id'], created['id'], 'user')
+                    logger.debug(f"Created user: {tallyfy_user['email']}")
+                    self.id_mapper.add_mapping(member['id'], created['id'], 'user')
                     successful += 1
                 
             except Exception as e:
@@ -714,7 +717,7 @@ class PipefyMigrationOrchestrator:
         """Webhooks migration phase"""
         logger.info("Migrating webhooks...")
         
-        webhooks = self.pipefy_client.list_webhooks(pipe_id)
+        webhooks = self.pipefy_client.get_webhooks(pipe_id)
         logger.info(f"Found {len(webhooks)} webhooks to migrate")
         
         if dry_run:

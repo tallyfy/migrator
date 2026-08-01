@@ -33,9 +33,21 @@ class TestUserTransformer(unittest.TestCase):
         """Regression: the address must survive the key change.
 
         The source key is `email` (OBJECT_MAPPING.md: "Email -> Email (unique
-        identifier)"); Tallyfy wants it under `text`. This transformer used to READ
-        "text" AND validate on it, so every real user raised
-        "ValueError: Missing required fields" instead of migrating.
+        identifier)"). This transformer used to READ "text" AND validate on it,
+        so every real user raised "ValueError: Missing required fields" instead
+        of migrating.
+
+        The OUTPUT key is `email` too, and that is not a guess -- main.py:310
+        hands this dict straight to `create_user(tallyfy_user)`, which does
+        `self._make_request('POST', '/users', json=user_data)` with no
+        remapping. So whatever key this transformer writes IS the wire key.
+        The client's own docstring says "user_data: User information including
+        email, ...", and `find_user_by_email` compares `user.get('email')`.
+
+        (A migrator whose caller unpacks the dict --
+        `create_member(email=member["text"], ...)` -- can legitimately keep
+        `text`, because the key only reaches the wire when the whole dict is
+        posted. This one posts the whole dict.)
         """
         result = self.transformer.transform({
             'id': 'u1',
@@ -46,7 +58,7 @@ class TestUserTransformer(unittest.TestCase):
             'active': True,
         })
 
-        self.assertEqual(result['text'], 'jane@example.com')
+        self.assertEqual(result['email'], 'jane@example.com')
 
     def test_a_user_without_an_email_is_rejected_loudly(self):
         """A missing email must raise, not migrate a member with no identity."""
@@ -86,7 +98,7 @@ class TestUserTransformer(unittest.TestCase):
         result = self.transformer.transform_guest({
             'id': 'g1', 'email': 'guest@example.com',
         })
-        self.assertEqual(result['text'], 'guest@example.com')
+        self.assertEqual(result['email'], 'guest@example.com')
 
 
 class TestFieldTransformer(unittest.TestCase):
