@@ -1,5 +1,5 @@
 """
-Logger Configuration for RocketLane Migration
+Logger Configuration for Google Forms Migration
 Sets up comprehensive logging for the migration process
 """
 
@@ -78,7 +78,7 @@ def setup_logging(log_level: str = None, log_file: str = None):
     
     # Log initial setup
     root_logger.info("=" * 60)
-    root_logger.info(f"RocketLane to Tallyfy Migration Started")
+    root_logger.info("Google Forms to Tallyfy Migration Started")
     root_logger.info(f"Log Level: {log_level}")
     root_logger.info(f"Log File: {log_file}")
     root_logger.info("=" * 60)
@@ -94,7 +94,7 @@ def configure_module_loggers():
     
     # Set specific levels for migration modules
     module_configs = {
-        'api.rocketlane_client': logging.DEBUG,
+        'api.google_forms_client': logging.DEBUG,
         'api.tallyfy_client': logging.DEBUG,
         'api.ai_client': logging.INFO,
         'transformers.field_transformer': logging.INFO,
@@ -243,7 +243,7 @@ class APICallLogger:
         Initialize API call logger
         
         Args:
-            api_name: Name of the API (rocketlane or tallyfy)
+            api_name: Name of the API (google_forms or tallyfy)
         """
         self.logger = logging.getLogger(f"api.{api_name}")
         self.api_name = api_name

@@ -1,6 +1,6 @@
 """
-Field Transformer for RocketLane to Tallyfy Migration
-Maps RocketLane field types to correct Tallyfy field types
+Field Transformer for Process Street to Tallyfy Migration
+Maps Process Street field types to correct Tallyfy field types
 """
 
 import logging
@@ -11,12 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 class FieldTransformer:
-    """Transform RocketLane fields to Tallyfy fields"""
+    """Transform Process Street fields to Tallyfy fields"""
     
-    # RocketLane field types to Tallyfy field types mapping
+    # Process Street field types to Tallyfy field types mapping
     # Based on actual Tallyfy api-v2 implementation
     FIELD_TYPE_MAP = {
-        # RocketLane -> Tallyfy
+        # Process Street -> Tallyfy
         'text': 'text',              # Short text (max 255)
         'longtext': 'textarea',       # Long text (max 6000)
         'number': 'text',            # No number type in Tallyfy, use text with validation
@@ -91,10 +91,10 @@ class FieldTransformer:
     
     def transform_field(self, field: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Transform a RocketLane field to Tallyfy format
+        Transform a Process Street field to Tallyfy format
         
         Args:
-            field: RocketLane field definition
+            field: Process Street field definition
             
         Returns:
             Tallyfy field definition
@@ -131,7 +131,7 @@ class FieldTransformer:
             'metadata': {
                 'original_type': field_type,
                 'original_id': field.get('id'),
-                'rocketlane_config': field.get('config', {})
+                'process_street_config': field.get('config', {})
             }
         }
         
@@ -220,7 +220,7 @@ class FieldTransformer:
         return transformed
     
     def _transform_validation(self, validation: Any) -> str:
-        """Transform RocketLane validation rules to Laravel format"""
+        """Transform Process Street validation rules to Laravel format"""
         if isinstance(validation, dict):
             rules = []
             
@@ -292,7 +292,7 @@ class FieldTransformer:
         Transform multiple fields
         
         Args:
-            fields: List of RocketLane fields
+            fields: List of Process Street fields
             
         Returns:
             List of Tallyfy fields

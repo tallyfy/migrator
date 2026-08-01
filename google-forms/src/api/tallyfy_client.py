@@ -1,5 +1,5 @@
 """
-Tallyfy API Client for RocketLane Migration
+Tallyfy API Client for Google Forms Migration
 Handles all interactions with Tallyfy API using CORRECT field types and endpoints
 """
 
