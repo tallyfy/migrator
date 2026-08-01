@@ -192,7 +192,7 @@ class TallyfyClient:
         if prerun:
             data['prerun'] = self.build_prerun_fields(prerun)
             
-        response = self.session.post(f"{self.base_url}/api/organizations/{self.organization_id}/checklists", json=data)
+        response = self.session.post(f"{self.base_url}/organizations/{self.organization_id}/checklists", json=data)
         response.raise_for_status()
         return response.json()
     
@@ -228,7 +228,7 @@ class TallyfyClient:
             else:
                 payload['prerun'] = dict(data)
             
-        response = self.session.post(f"{self.base_url}/api/organizations/{self.organization_id}/runs", json=payload)
+        response = self.session.post(f"{self.base_url}/organizations/{self.organization_id}/runs", json=payload)
         response.raise_for_status()
         return response.json()
     

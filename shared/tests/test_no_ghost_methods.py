@@ -122,12 +122,48 @@ KNOWN_MISSING = [
     ('wrike', 'ErrorHandler', 'handle_critical_error'),]
 
 
+def _methods_of(path, class_name):
+    if not os.path.exists(path):
+        return None
+    for node in ast.walk(ast.parse(open(path).read())):
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            return {m.name for m in node.body
+                    if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    return None
+
+
 def _class_methods(vendor):
+    """Resolve each class through main.py's imports where possible.
+
+    A plain scan unions same-named classes, and process-street defines
+    ProcessStreetClient twice with different method sets -- so a union would
+    report a method as present because the OTHER, unimported copy has it, and
+    a real ghost would go missing. (The sibling constructor gate hit the
+    mirror-image of this: it picked one copy by glob order and invented a bug
+    that did not exist, passing locally and failing on CI.)
+    """
+    main_path = os.path.join(REPO_ROOT, vendor, 'src', 'main.py')
+    tree = ast.parse(open(main_path).read())
+
+    imported = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            parts = [p for p in node.module.split('.') if p and p != 'src']
+            module_path = os.path.join(REPO_ROOT, vendor, 'src', *parts) + '.py'
+            for alias in node.names:
+                imported[alias.asname or alias.name] = module_path
+
     methods = {}
-    pattern = os.path.join(REPO_ROOT, vendor, 'src', '**', '*.py')
-    for path in glob.glob(pattern, recursive=True):
+    for name, module_path in imported.items():
+        found = _methods_of(module_path, name)
+        if found is not None:
+            methods[name] = found
+
+    # Anything not imported by name (defined in main.py, or star-imported)
+    # falls back to a scan, deterministically ordered.
+    for path in sorted(glob.glob(os.path.join(REPO_ROOT, vendor, 'src', '**', '*.py'), recursive=True)):
         for node in ast.walk(ast.parse(open(path).read())):
-            if isinstance(node, ast.ClassDef):
+            if isinstance(node, ast.ClassDef) and node.name not in methods:
                 methods.setdefault(node.name, set()).update(
                     m.name for m in node.body
                     if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
