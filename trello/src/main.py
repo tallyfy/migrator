@@ -66,8 +66,14 @@ class TrelloMigrationOrchestrator:
             logger.info("⚠️ AI disabled - using deterministic rules")
         
         # Initialize API clients
-        self.vendor_client = TrelloClient()
-        self.tallyfy_client = TallyfyClient()
+        self.vendor_client = TrelloClient(
+            api_key=os.getenv('TRELLO_API_KEY'),
+            api_token=os.getenv('TRELLO_TOKEN')
+        )
+        self.tallyfy_client = TallyfyClient(
+            api_key=os.getenv('TALLYFY_API_KEY'),
+            organization=os.getenv('TALLYFY_ORGANIZATION')
+        )
         
         # Initialize transformers
         self.field_transformer = FieldTransformer(self.ai_client)

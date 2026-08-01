@@ -72,12 +72,15 @@ class GoogleFormsMigrationOrchestrator(FormMigratorBase):
             logger.info("⚠️ AI disabled - using deterministic rules")
         
         # Initialize API clients
-        self.google_forms_client = GoogleFormsClient()
+        self.google_forms_client = GoogleFormsClient(
+            credentials_path=os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE')
+            or os.getenv('GOOGLE_CREDENTIALS_FILE', 'credentials.json')
+        )
         
         self.tallyfy_client = TallyfyClient(
             api_key=os.getenv('TALLYFY_API_KEY'),
             organization=os.getenv('TALLYFY_ORGANIZATION'),
-            api_url=os.getenv('TALLYFY_API_URL', 'https://api.tallyfy.com/api')
+            base_url=os.getenv('TALLYFY_API_URL', 'https://api.tallyfy.com')
         )
         
         # Initialize transformers

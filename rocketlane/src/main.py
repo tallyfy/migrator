@@ -80,7 +80,7 @@ class RocketLaneMigrationOrchestrator:
         self.tallyfy_client = TallyfyClient(
             api_key=os.getenv('TALLYFY_API_KEY'),
             organization=os.getenv('TALLYFY_ORGANIZATION'),
-            api_url=os.getenv('TALLYFY_API_URL', 'https://api.tallyfy.com/api')
+            base_url=os.getenv('TALLYFY_API_URL', 'https://api.tallyfy.com')
         )
         
         # Initialize transformers
