@@ -207,3 +207,66 @@ class TestFallbackOnlyEmitsRealTallyfyFieldTypes:
                 f'{vendor}: duplicate entry in the literal at line {node.lineno} '
                 f'({constants}) -- a distinct value was overwritten'
             )
+
+
+class TestNoUnreachableBranchAnywhereInVendorSource:
+    """The same defect appeared far outside `ai_client.py`.
+
+    Scoping the shadowing check to one file was a mistake. The identical
+    corruption -- several consecutive branches collapsed onto the same literal,
+    so only the first can ever run -- was also sitting in:
+
+      process-street/src/transformers/form_transformer.py
+          four consecutive `elif field_type == "text"`, whose bodies set
+          email_format, url_format, phone_format and min/max. Every validated
+          Process Street field got email_format, and the url, phone and numeric
+          rules were dead.
+
+      kissflow/src/transformers/process_transformer.py
+          `elif step_type == "text"` emitting "text" as a Tallyfy STEP type
+          (the set is task/approval/expiring/email), which left
+          `_create_email_template` unreachable.
+
+    In every case the branch BODY identifies what the condition must have been,
+    so this is a mechanical check, not a judgement call.
+    """
+
+    @staticmethod
+    def _shadowed_branches(path):
+        import ast
+
+        findings = []
+        tree = ast.parse(open(path).read())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.If):
+                continue
+            seen = []
+            current = node
+            while isinstance(current, ast.If):
+                dumped = ast.dump(current.test)
+                if dumped in seen:
+                    findings.append(current.lineno)
+                seen.append(dumped)
+                current = current.orelse[0] if (
+                    len(current.orelse) == 1 and isinstance(current.orelse[0], ast.If)
+                ) else None
+        return findings
+
+    @pytest.mark.parametrize('vendor', VENDORS)
+    def test_no_vendor_source_file_has_a_shadowed_branch(self, vendor):
+        import glob
+
+        vendor_root = os.path.join(REPO_ROOT, vendor, 'src')
+        if not os.path.isdir(vendor_root):
+            pytest.skip(f'{vendor} has no src/')
+
+        offenders = {}
+        for path in glob.glob(os.path.join(vendor_root, '**', '*.py'), recursive=True):
+            lines = self._shadowed_branches(path)
+            if lines:
+                offenders[os.path.relpath(path, REPO_ROOT)] = lines
+
+        assert not offenders, (
+            f'{vendor} has branches that can never execute -- an earlier branch '
+            f'in the same chain tests exactly the same thing: {offenders}'
+        )

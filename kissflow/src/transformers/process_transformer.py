@@ -101,8 +101,11 @@ class ProcessTransformer:
             # Map Kissflow step types to Tallyfy
             if step_type == 'approval':
                 tallyfy_type = 'approval'
-            elif step_type == "text":
-                tallyfy_type = "text"
+            elif step_type == 'email':
+                # `text` is not a Tallyfy step type -- the set is task, approval,
+                # expiring, email. _create_email_template() below took an
+                # `email_step` and was unreachable while this was keyed "text".
+                tallyfy_type = 'email'
             elif step_type == 'integration':
                 tallyfy_type = 'task'  # Integration becomes task with webhook
             elif step_type == 'decision':

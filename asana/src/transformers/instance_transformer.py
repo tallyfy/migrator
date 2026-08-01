@@ -310,9 +310,11 @@ class InstanceTransformer:
         """
         field_type = field.get('type')
         
-        if field_type == "text":
+        if field_type == 'text':
             return field.get('text_value')
-        elif field_type == "text":
+        elif field_type == 'number':
+            # Keyed "text" before, so it could never run and every Asana number
+            # custom field fell through to the text branch.
             return field.get('number_value')
         elif field_type == 'enum':
             enum_value = field.get('enum_value')
