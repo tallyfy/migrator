@@ -1,5 +1,5 @@
 """
-User Transformer for RocketLane to Tallyfy Migration
+User Transformer for Pipefy to Tallyfy Migration
 Handles customer, user, and team transformations with paradigm shifts
 """
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class UserTransformer:
-    """Transform RocketLane users, customers, and teams to Tallyfy entities"""
+    """Transform Pipefy users, customers, and teams to Tallyfy entities"""
     
     def __init__(self, ai_client=None):
         """
@@ -42,17 +42,17 @@ class UserTransformer:
     
     def transform_internal_user(self, user: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Transform RocketLane internal user to Tallyfy member
+        Transform Pipefy internal user to Tallyfy member
         
         Args:
-            user: RocketLane user object
+            user: Pipefy user object
             
         Returns:
             Tallyfy user structure
         """
         self.transformation_stats['users_total'] += 1
         
-        # Determine role based on RocketLane permissions
+        # Determine role based on Pipefy permissions
         tallyfy_role = self._determine_tallyfy_role(user)
         
         # Create Tallyfy user structure
@@ -62,7 +62,7 @@ class UserTransformer:
             'lastname': user.get('last_name', ''),
             'role': tallyfy_role,
             'metadata': {
-                'source': 'rocketlane',
+                'source': 'pipefy',
                 'original_id': user.get('id'),
                 'original_role': user.get('role'),
                 'department': user.get('department'),
@@ -93,10 +93,10 @@ class UserTransformer:
     
     def transform_customer(self, customer: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Transform RocketLane customer based on portal handling strategy
+        Transform Pipefy customer based on portal handling strategy
         
         Args:
-            customer: RocketLane customer object
+            customer: Pipefy customer object
             
         Returns:
             Tallyfy entity (guest or organization)
@@ -153,7 +153,7 @@ class UserTransformer:
             'name': primary_contact.get('name', customer.get('name', 'Guest')),
             'company': customer.get('company_name') or customer.get('name'),
             'metadata': {
-                'source': 'rocketlane_customer',
+                'source': 'pipefy_customer',
                 'original_id': customer.get('id'),
                 'tier': customer.get('tier'),
                 'industry': customer.get('industry'),
@@ -192,7 +192,7 @@ class UserTransformer:
             'name': customer.get('company_name') or customer.get('name'),
             'subdomain': self._generate_subdomain(customer),
             'metadata': {
-                'source': 'rocketlane_customer',
+                'source': 'pipefy_customer',
                 'original_id': customer.get('id'),
                 'tier': customer.get('tier'),
                 'industry': customer.get('industry'),
@@ -260,10 +260,10 @@ class UserTransformer:
     
     def transform_team(self, team: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Transform RocketLane team to Tallyfy group
+        Transform Pipefy team to Tallyfy group
         
         Args:
-            team: RocketLane team object
+            team: Pipefy team object
             
         Returns:
             Tallyfy group structure
@@ -274,7 +274,7 @@ class UserTransformer:
             'name': team.get('name', 'Team'),
             'description': team.get('description', ''),
             'metadata': {
-                'source': 'rocketlane',
+                'source': 'pipefy',
                 'original_id': team.get('id'),
                 'team_lead': team.get('lead_id'),
                 'department': team.get('department'),
@@ -294,8 +294,8 @@ class UserTransformer:
         return group
     
     def _determine_tallyfy_role(self, user: Dict[str, Any]) -> str:
-        """Determine Tallyfy role based on RocketLane permissions"""
-        rl_role = user.get('role', '').lower()
+        """Determine Tallyfy role based on Pipefy permissions"""
+        source_role = user.get('role', '').lower()
         permissions = user.get('permissions', [])
         
         # Direct role mapping
@@ -318,7 +318,7 @@ class UserTransformer:
         if any(perm in permissions for perm in admin_permissions):
             return 'admin'
         
-        return role_map.get(rl_role, 'member')
+        return role_map.get(source_role, 'member')
     
     def transform_users_batch(self, users: List[Dict[str, Any]]) -> Dict[str, List[Dict]]:
         """

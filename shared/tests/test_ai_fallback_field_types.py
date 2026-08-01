@@ -316,3 +316,63 @@ class TestNoCollapsedMembershipTests:
             f'{vendor} repeats a value inside a literal, so a distinct entry was '
             f'overwritten: {offenders}'
         )
+
+class TestNoCollapsedDictKeys:
+    """The same corruption inside a dict LITERAL, which the gates above miss.
+
+    `TestNoCollapsedMembershipTests` walks `ast.List`, `ast.Tuple` and `ast.Set`
+    -- and stops there. A dict was never checked, which is how five field-type
+    maps sat corrupted through every gate this file already had:
+
+        FIELD_TYPE_MAP = {
+            "text": 'text',
+            "text": 'text',   # silently replaces the entry above
+            'link': 'text',   # With URL validation
+        }
+
+    Python keeps only the last of a repeated key, so each duplicate is a source
+    field type that has NO mapping at all and falls through to whatever the
+    caller's default is. That is worse than the membership case: these dicts are
+    the tables that decide what every single migrated field becomes.
+
+    Monday is the proof that it mattered. `FIELD_VALIDATIONS` is keyed by the
+    same `column_type` as `COLUMN_TYPE_MAP` and holds 'email' and 'phone'
+    entries -- but `COLUMN_TYPE_MAP` had neither, just three 'text' keys, so
+    those two validations could never fire for any input.
+
+    Scope is the whole repo, not `ai_client.py`: every widening of a gate in
+    this file has found live bugs on its first run.
+    """
+
+    @pytest.mark.parametrize('vendor', VENDORS + ['shared'])
+    def test_no_dict_literal_repeats_a_key(self, vendor):
+        import ast
+        import glob
+
+        root = os.path.join(REPO_ROOT, vendor, 'src')
+        if vendor == 'shared':
+            root = os.path.join(REPO_ROOT, 'shared')
+        if not os.path.isdir(root):
+            pytest.skip(f'{vendor} has no source directory')
+
+        offenders = {}
+        for path in glob.glob(os.path.join(root, '**', '*.py'), recursive=True):
+            tree = ast.parse(open(path).read())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Dict):
+                    continue
+                keys = [
+                    k.value for k in node.keys
+                    if isinstance(k, ast.Constant) and isinstance(k.value, str)
+                ]
+                dupes = sorted({k for k in keys if keys.count(k) > 1})
+                if dupes:
+                    offenders.setdefault(os.path.relpath(path, REPO_ROOT), []).append(
+                        (node.lineno, dupes)
+                    )
+
+        assert not offenders, (
+            f'{vendor} repeats a key inside a dict literal. Python keeps only '
+            f'the last one, so every earlier entry is silently discarded and '
+            f'that source type has no mapping: {offenders}'
+        )

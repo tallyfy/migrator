@@ -1,5 +1,5 @@
 """
-Error Handler for RocketLane Migration
+Error Handler for Google Forms Migration
 Comprehensive error handling and recovery
 """
 

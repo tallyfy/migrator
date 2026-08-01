@@ -67,7 +67,10 @@ class WrikeMigrationOrchestrator:
         
         # Initialize API clients
         self.vendor_client = WrikeClient()
-        self.tallyfy_client = TallyfyClient()
+        self.tallyfy_client = TallyfyClient(
+            api_key=os.getenv('TALLYFY_API_KEY'),
+            organization=os.getenv('TALLYFY_ORGANIZATION')
+        )
         
         # Initialize transformers
         self.field_transformer = FieldTransformer(self.ai_client)

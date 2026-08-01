@@ -14,11 +14,15 @@ class FieldTransformer:
     # Kissflow field types to Tallyfy field types mapping
     FIELD_TYPE_MAP = {
         # Basic Fields
-        "text": 'text',
-        "textarea": 'textarea',
+        'text': 'text',
+        'textarea': 'textarea',
         'rich_text': 'textarea',
-        "text": 'text',  # With short_text validation
-        "text": "text",
+        # Two keys collapsed onto 'text' above. kissflow's own README.md:414
+        # documents `'email': 'email'` in this map, and OBJECT_MAPPING.md:73
+        # documents Number. Tallyfy has no number type (shared/capture_shapes.py
+        # maps 'number' -> 'text'), so number lands on text.
+        'email': 'email',
+        'number': 'text',
         'currency': "text",
         'rating': "text",
         'slider': "text",
@@ -52,16 +56,34 @@ class FieldTransformer:
         'remote_lookup': 'dropdown',  # External data as dropdown
         'signature': 'file',  # Signature as image file_upload
         'image': 'file',
-        "text": 'text',  # URL with validation
-        "text": 'text',  # Phone with validation
+        # Both keys were renamed to "text" and collapsed onto the 'text' entry
+        # at the top of this map, so Kissflow URL and Phone fields were never
+        # mapped. The surviving trailing comments name them outright.
+        'url': 'text',  # URL with validation
+        'phone': 'text',  # Phone with validation
     }
     
     # Field validations to apply
+    # Keyed by the KISSFLOW source type (see the lookup at line ~101), same as
+    # FIELD_TYPE_MAP above.
+    #
+    # Four keys collapsed onto one "text", so only a single entry survived and
+    # no Kissflow field except currency could ever get a validation. The four
+    # are determined by elimination -- they are exactly the validated types this
+    # same file names: email and number (README.md:414, OBJECT_MAPPING.md:73)
+    # plus url and phone (the two trailing comments in FIELD_TYPE_MAP above).
+    #
+    # Their BODIES were flattened to an identical {'type': "text"} as well, so
+    # the per-type patterns are NOT recoverable here (#6). The shape a restored
+    # entry should take is {'type': 'text', 'pattern': <regex>} -- the same
+    # shape the surviving 'currency' entry below uses for its 'format' key.
+    # Restoring the keys makes the lookup reachable again without inventing
+    # rules that were never written down.
     FIELD_VALIDATIONS = {
-        "text": {'type': "text"},
-        "text": {'type': "text"},
-        "text": {'type': "text"},
-        "text": {'type': "text"},
+        'email': {'type': "text"},
+        'url': {'type': "text"},
+        'phone': {'type': "text"},
+        'number': {'type': "text"},
         'currency': {'type': "text", 'format': 'currency'},
     }
     

@@ -12,8 +12,12 @@ class FieldTransformer:
     
     # Asana field types to Tallyfy field types
     FIELD_TYPE_MAP = {
-        "text": 'text',
-        "text": "text",
+        'text': 'text',
+        # Was a second "text" key, which silently replaced this entry. Asana's
+        # custom field types are text/number/enum/multi_enum/date/people, and
+        # validator.py:157 lists exactly these eight in this order. Tallyfy has
+        # no number type, so it lands on text -- same as 'currency' below.
+        'number': 'text',
         'enum': 'dropdown',           # Single select
         'multi_enum': 'multiselect',    # Multi select
         'date': 'date',
