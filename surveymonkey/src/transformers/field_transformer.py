@@ -106,7 +106,13 @@ class FieldTransformer:
             'type': tallyfy_type,
             'label': self._clean_heading(question.get('headings', [{}])[0].get('heading', 'Untitled Question')),
             'name': f"field_{question.get('id', '')}",
-            'required': question.get('required', {}).get('text', '') != '',
+            # `or {}`, not a default. SurveyMonkey sends "required": null for an
+            # optional question, and a default only applies when the key is
+            # ABSENT -- a present null still comes back as None and
+            # None.get('text') raises. The same file already guards it
+            # correctly at _build_validation_rules ("if required and
+            # required.get('text')"), which is how we know the shape is real.
+            'required': (question.get('required') or {}).get('text', '') != '',
             'help_text': question.get('headings', [{}])[0].get('description', ''),
             'metadata': {
                 'surveymonkey_id': question.get('id'),
