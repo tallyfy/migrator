@@ -487,7 +487,10 @@ class RollbackManager:
                 f"{action.resource_id}"
             )
 
-        create_method(action.original_data)
+        try:
+            create_method(**action.original_data)
+        except TypeError:
+            create_method(action.original_data)
         self.logger.info(f"Restored {action.resource_type.value}: {action.resource_id}")
     
     def _revert_update(self, action: RollbackAction):

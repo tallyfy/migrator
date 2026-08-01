@@ -835,8 +835,7 @@ class RocketLaneMigrationOrchestrator:
             'dry_run': dry_run,
             'phases': results,
             'statistics': {
-                'total_api_calls': self.rocketlane_client.get_stats()['api_calls'] + 
-                                 self.tallyfy_client.get_statistics()['api_calls'],
+                'tallyfy_resources': self.tallyfy_client.get_statistics(),
                 'ai_decisions': sum(len(r.get('ai_decisions', [])) for r in results.values()),
                 'errors': self.error_handler.get_error_count()
             },

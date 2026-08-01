@@ -182,7 +182,13 @@ class ClickUpClient:
     def get_users(self) -> List[Dict[str, Any]]:
         """Get all users in workspace"""
         response = self._make_request('GET', f'/team/{self.workspace_id}/user')
-        return response.get('members', [])
+        members = response.get('members', [])
+        users = []
+        for member in members:
+            user = member.get('user', {})
+            user['role'] = member.get('role')
+            users.append(user)
+        return users
     
     def get_user(self, user_id: str) -> Dict[str, Any]:
         """Get specific user details"""
