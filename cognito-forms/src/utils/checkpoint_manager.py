@@ -1,5 +1,5 @@
 """
-Checkpoint Manager for RocketLane Migration
+Checkpoint Manager for Cognito Forms Migration
 Enables resume capability for interrupted migrations
 """
 
@@ -246,7 +246,7 @@ class CheckpointManager:
         return items
     
     def save_id_mapping(self, source_id: str, target_id: str, entity_type: str,
-                       source_system: str = 'rocketlane', target_system: str = 'tallyfy'):
+                       source_system: str = 'cognito_forms', target_system: str = 'tallyfy'):
         """
         Save ID mapping between systems
         
@@ -276,7 +276,7 @@ class CheckpointManager:
             raise
     
     def get_id_mapping(self, source_id: str, entity_type: Optional[str] = None,
-                       source_system: str = 'rocketlane') -> Optional[str]:
+                       source_system: str = 'cognito_forms') -> Optional[str]:
         """
         Get target ID for a source ID
         

@@ -1,5 +1,5 @@
 """
-Logger Configuration for RocketLane Migration
+Logger Configuration for Typeform Migration
 Sets up comprehensive logging for the migration process
 """
 
@@ -114,7 +114,7 @@ def configure_module_loggers():
     
     # Set specific levels for migration modules
     module_configs = {
-        'api.rocketlane_client': logging.DEBUG,
+        'src.api.typeform_client': logging.DEBUG,
         'api.tallyfy_client': logging.DEBUG,
         'api.ai_client': logging.INFO,
         'transformers.field_transformer': logging.INFO,
@@ -263,7 +263,7 @@ class APICallLogger:
         Initialize API call logger
         
         Args:
-            api_name: Name of the API (rocketlane or tallyfy)
+            api_name: Name of the API (typeform or tallyfy)
         """
         self.logger = logging.getLogger(f"api.{api_name}")
         self.api_name = api_name
