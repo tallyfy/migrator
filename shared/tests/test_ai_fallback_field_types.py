@@ -270,3 +270,49 @@ class TestNoUnreachableBranchAnywhereInVendorSource:
             f'{vendor} has branches that can never execute -- an earlier branch '
             f'in the same chain tests exactly the same thing: {offenders}'
         )
+
+
+class TestNoCollapsedMembershipTests:
+    """`x in [...]` hides the same corruption, and the AST gates above miss it.
+
+    Two shapes, both found in kissflow's field transformer after the earlier
+    gates passed clean:
+
+        if field_type in ["text", "textarea", 'rich_text', "text", "text", "text"]:
+            return str(value)
+        elif field_type in ["text", 'currency', 'rating', 'slider']:
+            return float(value)
+
+    Three distinct source types collapsed into the first list, and the second
+    branch could never run for "text" because the first already matched it --
+    so numeric values were stringified instead of coerced.
+    """
+
+    @pytest.mark.parametrize('vendor', VENDORS)
+    def test_no_membership_literal_repeats_a_value(self, vendor):
+        import ast
+        import glob
+
+        vendor_root = os.path.join(REPO_ROOT, vendor, 'src')
+        if not os.path.isdir(vendor_root):
+            pytest.skip(f'{vendor} has no src/')
+
+        offenders = {}
+        for path in glob.glob(os.path.join(vendor_root, '**', '*.py'), recursive=True):
+            tree = ast.parse(open(path).read())
+            for node in ast.walk(tree):
+                if not isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+                    continue
+                # An empty-string pair (`['', '']`) is a legitimate default
+                # for a name split, not a collapsed literal.
+                values = [
+                    e.value for e in node.elts
+                    if isinstance(e, ast.Constant) and isinstance(e.value, str) and e.value
+                ]
+                if len(values) > 1 and len(values) != len(set(values)):
+                    offenders.setdefault(os.path.relpath(path, REPO_ROOT), []).append(node.lineno)
+
+        assert not offenders, (
+            f'{vendor} repeats a value inside a literal, so a distinct entry was '
+            f'overwritten: {offenders}'
+        )
