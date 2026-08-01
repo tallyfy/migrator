@@ -580,7 +580,8 @@ class RocketLaneMigrationOrchestrator:
                         )
                         
                         # Migrate task states
-                        for task in full_project.get('tasks', []):
+                        tasks = self.rocketlane_client.get_tasks(project['id'])
+                        for task in tasks:
                             results['tasks']['total'] += 1
                             try:
                                 if task.get('completed'):
