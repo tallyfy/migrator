@@ -274,9 +274,12 @@ class FieldTransformer:
                 return [{'name': f.get('name'), "text": f.get("text")} for f in files]
             return []
             
-        elif column_type == "text" or column_type == "text" or column_type == 'link':
+        elif column_type == 'text' or column_type == 'link':
             if isinstance(value, dict):
-                return value.get("text") or value.get("text") or value.get("text") or text
+                # Was `value.get("text")` three times over. Two distinct keys
+                # collapsed into it and are not recoverable (#6); for a `link`
+                # column this returns the display text, not the URL.
+                return value.get('text') or text
             return text
             
         elif column_type == 'rating':

@@ -715,9 +715,9 @@ class TallyfyClient:
         for user_data in users:
             try:
                 # Check if user already exists
-                existing = self.find_user_by_email(user_data["text"])
+                existing = self.find_user_by_email(user_data.get('email'))
                 if existing:
-                    logger.info(f"User already exists: {user_data['text']}")
+                    logger.info(f"User already exists: {user_data.get('email')}")
                     successful.append(existing)
                 else:
                     created = self.create_user(user_data)

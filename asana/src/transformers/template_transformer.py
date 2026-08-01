@@ -357,8 +357,8 @@ class TemplateTransformer:
         if not assignee:
             return 'process_owner'
         
-        # Use short_text as identifier (will be mapped during user migration)
-        email = assignee.get("text")
+        # Use email as identifier (will be mapped during user migration)
+        email = assignee.get('email')
         if email:
             return f"member:{email}"
         
