@@ -239,7 +239,7 @@ class TallyfyClient:
         self.stats['data_imported'].setdefault('users', 0)
         self.stats['data_imported']['users'] += 1
         
-        logger.info(f"Created user: {user_data['text']}")
+        logger.info(f"Created user: {user_data.get('email', user_data.get('first_name', 'Unknown'))}")
         return result
     
     def get_user(self, user_id: str) -> Dict[str, Any]:
@@ -254,7 +254,7 @@ class TallyfyClient:
         """Find user by email address"""
         users = self.list_users()
         for user in users:
-            if user.get("text") == email:
+            if user.get('email') == email:
                 return user
         return None
     

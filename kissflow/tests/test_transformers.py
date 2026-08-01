@@ -188,6 +188,39 @@ class TestUserTransformer:
         assert result['role'] == 'admin'
         assert result['active'] == True
     
+    def test_a_phone_number_does_not_overwrite_the_email(self):
+        """Regression: `text` is the Tallyfy EMAIL key, and it was being clobbered.
+
+        `transform_user` set `text` to the email, then twenty lines later did
+        `tallyfy_member["text"] = kissflow_user['Phone']`. So every Kissflow user
+        who had a phone number was created in Tallyfy with their phone number as
+        their email address.
+
+        The whole existing suite stayed green through this because not one
+        fixture supplied a `Phone`. That is the only reason it survived.
+        """
+        result = self.transformer.transform_user({
+            'Id': 'user_3',
+            'Email': 'jane@company.com',
+            'FirstName': 'Jane',
+            'Role': 'member',
+            'Status': 'active',
+            'Phone': '+1 314 555 0123',
+        })
+
+        assert result['text'] == 'jane@company.com'
+        assert result.get('phone') == '+1 314 555 0123'
+
+    def test_notification_preferences_key_the_email_channel_correctly(self):
+        """Regression: the email channel was keyed `text` beside in_app/daily_digest."""
+        settings = self.transformer.transform_user_preferences({
+            'EmailNotifications': False,
+            'InAppNotifications': True,
+        })
+
+        assert settings['notifications']['email'] is False
+        assert settings['notifications']['in_app'] is True
+
     def test_developer_becomes_admin(self):
         """Test developers are treated as admins."""
         kissflow_user = {

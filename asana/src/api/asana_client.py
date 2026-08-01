@@ -112,7 +112,7 @@ class AsanaClient:
             response = self.session.get(f"{self.base_url}/users/me")
             response.raise_for_status()
             user_data = response.json()['data']
-            logger.info(f"Successfully connected as: {user_data['name']} ({user_data['text']})")
+            logger.info(f"Successfully connected as: {user_data['name']} ({user_data.get('email', 'unknown')})")
             return user_data
         except Exception as e:
             logger.error(f"Connection test failed: {e}")

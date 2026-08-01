@@ -1,5 +1,5 @@
 """
-Migration Validator for RocketLane to Tallyfy
+Migration Validator for NextMatter to Tallyfy
 Validates data integrity and migration success
 """
 
@@ -14,15 +14,15 @@ logger = logging.getLogger(__name__)
 class MigrationValidator:
     """Validate migration data and integrity"""
     
-    def __init__(self, rocketlane_client, tallyfy_client):
+    def __init__(self, vendor_client, tallyfy_client):
         """
         Initialize validator
         
         Args:
-            rocketlane_client: RocketLane API client
+            vendor_client: Source system API client
             tallyfy_client: Tallyfy API client
         """
-        self.rocketlane_client = rocketlane_client
+        self.vendor_client = vendor_client
         self.tallyfy_client = tallyfy_client
         
         self.validation_results = {
@@ -361,7 +361,7 @@ class MigrationValidator:
         
         try:
             # Get source template
-            source_template = self.rocketlane_client.get_template(source_id)
+            source_template = self.vendor_client.get_template(source_id)
             
             # Get target template - would need actual API call
             # target_template = self.tallyfy_client.get_template(target_id)
@@ -373,7 +373,17 @@ class MigrationValidator:
             # - Dependencies
             
         except Exception as e:
+            # Returning an empty list here reads as "validated, no problems".
+            # It is not -- the check never ran. Report it, so a validator that
+            # cannot execute can never hand back a clean bill of health.
             logger.warning(f"Could not validate template structure: {e}")
+            issues.append({
+                'type': 'validation_incomplete',
+                'severity': 'warning',
+                'source_id': source_id,
+                'target_id': target_id,
+                'message': f'Template structure was not validated: {e}',
+            })
         
         return issues
     
@@ -383,7 +393,7 @@ class MigrationValidator:
         
         try:
             # Get source project
-            source_project = self.rocketlane_client.get_project(source_id)
+            source_project = self.vendor_client.get_project(source_id)
             
             # Get target process - would need actual API call
             # target_process = self.tallyfy_client.get_process(target_id)
@@ -396,6 +406,13 @@ class MigrationValidator:
             
         except Exception as e:
             logger.warning(f"Could not validate process state: {e}")
+            issues.append({
+                'type': 'validation_incomplete',
+                'severity': 'warning',
+                'source_id': source_id,
+                'target_id': target_id,
+                'message': f'Process state was not validated: {e}',
+            })
         
         return issues
     

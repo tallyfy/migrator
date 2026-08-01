@@ -1,5 +1,5 @@
 """
-Migration Validator for RocketLane to Tallyfy
+Migration Validator for Typeform to Tallyfy
 Validates data integrity and migration success
 """
 
