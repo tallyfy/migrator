@@ -22,8 +22,14 @@ class FieldTransformer:
         'date': 'date',
         'status': 'dropdown',
         'dropdown': 'dropdown',
-        "text": 'text',  # With short_text validation
-        "text": 'text',  # With short_text validation
+        # These two keys were both renamed to "text" and collapsed onto the
+        # `text` entry above, so Monday's email and phone columns were never
+        # mapped at all. FIELD_VALIDATIONS below is keyed by the SAME
+        # column_type and still holds 'email' and 'phone' entries, which could
+        # therefore never fire -- that is the proof of what belongs here. The
+        # surviving `# With URL validation` comment shows the comment pattern.
+        'email': 'text',  # With email validation
+        'phone': 'text',  # With phone validation
         'link': 'text',   # With URL validation
         
         # Advanced types

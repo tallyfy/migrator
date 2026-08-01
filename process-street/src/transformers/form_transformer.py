@@ -16,13 +16,15 @@ class FormTransformer(BaseTransformer):
     
     # Field type mapping
     FIELD_TYPE_MAPPING = {
-        "text": "text",
-        "textarea": "textarea",
-        "text": "text",
-        "text": "text",
-        'tel': "text",
-        "text": "text",
-        "text": "text",
+        'text': 'text',
+        'textarea': 'textarea',
+        # Four keys collapsed onto 'text' above. OBJECT_MAPPING.md:51-53
+        # documents Email, URL and Number, each as "Short Text + Validation".
+        # The fourth is not recoverable (#6).
+        'email': 'text',
+        'url': 'text',
+        'tel': 'text',
+        'number': 'text',
         'date': 'date',
         'datetime': 'datetime',
         'time': 'time',
