@@ -73,8 +73,7 @@ class GoogleFormsMigrationOrchestrator(FormMigratorBase):
         
         # Initialize API clients
         self.google_forms_client = GoogleFormsClient(
-            credentials_path=os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE')
-            or os.getenv('GOOGLE_CREDENTIALS_FILE', 'credentials.json')
+            credentials_path=os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', 'service-account.json')
         )
         
         self.tallyfy_client = TallyfyClient(
