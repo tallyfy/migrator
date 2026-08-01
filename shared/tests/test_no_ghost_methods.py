@@ -111,7 +111,6 @@ KNOWN_MISSING = [
     ('rocketlane', 'TallyfyClient', 'create_kickoff_form'),
     ('rocketlane', 'TallyfyClient', 'create_organization'),
     ('rocketlane', 'TallyfyClient', 'test_connection'),
-    ('rocketlane', 'TallyfyClient', 'update_task_assignees'),
     ('rocketlane', 'TemplateTransformer', 'transform_complex_form_to_workflow'),
     ('rocketlane', 'TemplateTransformer', 'transform_simple_form'),
     ('rocketlane', 'UserTransformer', 'transform_customer_to_guest'),
