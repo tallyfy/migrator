@@ -155,7 +155,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vendor: [asana, kissflow, monday, process-street]
+        vendor: [asana, kissflow, monday, process-street, surveymonkey]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
