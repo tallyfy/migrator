@@ -84,6 +84,11 @@ KNOWN_MISSING = [
     ('kissflow', 'KissflowClient', 'get_app_views'),
     ('kissflow', 'KissflowClient', 'get_app_workflows'),
     ('kissflow', 'KissflowClient', 'get_board_cards'),
+    ('monday', 'MondayClient', 'get_board'),
+    ('monday', 'MondayClient', 'get_items'),
+    ('monday', 'MondayClient', 'get_workspace'),
+    ('monday', 'TallyfyClient', 'batch_create_processes'),
+    ('monday', 'TallyfyClient', 'get_users'),
     ('nextmatter', 'CheckpointManager', 'get_last_completed_phase'),
     ('nextmatter', 'CheckpointManager', 'save_phase_checkpoint'),
     ('nextmatter', 'ErrorHandler', 'handle_critical_error'),
@@ -102,7 +107,6 @@ KNOWN_MISSING = [
     ('rocketlane', 'ErrorHandler', 'handle_error'),
     ('rocketlane', 'InstanceTransformer', 'transform_time_entry_to_comment'),
     ('rocketlane', 'RocketLaneClient', 'get_project_template'),
-    ('rocketlane', 'RocketLaneClient', 'get_stats'),
     ('rocketlane', 'TallyfyClient', 'create_comment'),
     ('rocketlane', 'TallyfyClient', 'create_kickoff_form'),
     ('rocketlane', 'TallyfyClient', 'create_organization'),
@@ -119,7 +123,8 @@ KNOWN_MISSING = [
     ('trello', 'TrelloClient', 'get_users'),
     ('wrike', 'CheckpointManager', 'get_last_completed_phase'),
     ('wrike', 'CheckpointManager', 'save_phase_checkpoint'),
-    ('wrike', 'ErrorHandler', 'handle_critical_error'),]
+    ('wrike', 'ErrorHandler', 'handle_critical_error'),
+]
 
 
 def _methods_of(path, class_name):
@@ -186,6 +191,25 @@ def _ghosts(vendor):
                     attr_to_class[target.attr] = node.value.func.id
                 elif isinstance(target, ast.Name):
                     attr_to_class[target.id] = node.value.func.id
+
+    # Second pass: `self.tallyfy = tallyfy_client`, where the local was built
+    # elsewhere in the file (typically in main(), then handed to the
+    # orchestrator's __init__). Without this the whole attribute is invisible
+    # -- monday assigns every one of its clients this way, so it had zero
+    # entries here while calling a create_user() that does not exist.
+    for _ in range(3):  # resolve short chains, e.g. a = b; self.c = a
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Assign) and isinstance(node.value, ast.Name)):
+                continue
+            source_class = attr_to_class.get(node.value.id)
+            if source_class is None:
+                continue
+            for target in node.targets:
+                if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) \
+                        and target.value.id == 'self':
+                    attr_to_class.setdefault(target.attr, source_class)
+                elif isinstance(target, ast.Name):
+                    attr_to_class.setdefault(target.id, source_class)
 
     found = {}
     for node in ast.walk(tree):

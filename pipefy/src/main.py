@@ -358,7 +358,13 @@ class PipefyMigrationOrchestrator:
                 # list_users() already flattens each member into a user dict
                 # with top-level keys: email, name, username, id, role.
                 tallyfy_user = {
-                    "text": member.get('email'),
+                    # `email`, not `text`. create_user() POSTs this dict
+                    # VERBATIM (tallyfy_client.py: `json=user_data`), so a
+                    # `text` key means the request carries no email at all --
+                    # and its success log reads
+                    # user_data.get('email', user_data.get('first_name')),
+                    # so it silently printed "Created user: Jane" instead.
+                    'email': member.get('email'),
                     'first_name': member.get('name', '').split()[0] if member.get('name') else '',
                     'last_name': ' '.join(member.get('name', '').split()[1:]) if member.get('name') else '',
                     'username': member.get('username'),
@@ -367,16 +373,16 @@ class PipefyMigrationOrchestrator:
                 }
                 
                 # Check if user exists
-                existing = self.tallyfy_client.find_user_by_email(tallyfy_user["text"])
+                existing = self.tallyfy_client.find_user_by_email(tallyfy_user['email'])
                 
                 if existing:
-                    logger.debug(f"User already exists: {tallyfy_user['text']}")
+                    logger.debug(f"User already exists: {tallyfy_user['email']}")
                     self.id_mapper.add_mapping(member['id'], existing['id'], 'user')
                     successful += 1
                 else:
                     # Create user in Tallyfy
                     created = self.tallyfy_client.create_user(tallyfy_user)
-                    logger.debug(f"Created user: {tallyfy_user['text']}")
+                    logger.debug(f"Created user: {tallyfy_user['email']}")
                     self.id_mapper.add_mapping(member['id'], created['id'], 'user')
                     successful += 1
                 
