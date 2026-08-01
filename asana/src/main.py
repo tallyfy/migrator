@@ -183,7 +183,7 @@ class AsanaMigrationOrchestrator:
             report['checks']['asana_connection'] = {
                 'status': 'passed',
                 'user': user['name'],
-                "text": user["text"]
+                'email': user.get('email', '')
             }
         except Exception as e:
             report['checks']['asana_connection'] = {

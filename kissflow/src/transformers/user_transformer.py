@@ -83,7 +83,10 @@ class UserTransformer:
             tallyfy_member['avatar_url'] = kissflow_user['ProfilePicture']
         
         if kissflow_user.get('Phone'):
-            tallyfy_member["text"] = kissflow_user['Phone']
+            # `text` is the Tallyfy EMAIL key, already set from `email` above.
+            # Writing the phone number here replaced every user's email address
+            # with their phone number.
+            tallyfy_member['phone'] = kissflow_user['Phone']
         
         if kissflow_user.get('TimeZone'):
             tallyfy_member['timezone'] = kissflow_user['TimeZone']
@@ -412,7 +415,7 @@ class UserTransformer:
         """
         return {
             'notifications': {
-                "text": preferences.get('EmailNotifications', True),
+                'email': preferences.get('EmailNotifications', True),
                 'in_app': preferences.get('InAppNotifications', True),
                 'daily_digest': preferences.get('DailyDigest', False),
                 'weekly_summary': preferences.get('WeeklySummary', False)
