@@ -579,33 +579,14 @@ class RocketLaneMigrationOrchestrator:
                             prerun_data=transformed.get('prerun', {})
                         )
                         
-                        # Migrate task states
-                        tasks = self.rocketlane_client.get_tasks(project['id'])
-                        for task in tasks:
-                            results['tasks']['total'] += 1
-                            try:
-                                if task.get('completed'):
-                                    # Mark task as complete
-                                    self.tallyfy_client.complete_task(
-                                        run_id=created_process['id'],
-                                        task_id=task['id'],
-                                        data={'completed_by': self._get_user_mapping(task.get('completed_by'))}
-                                    )
-                                
-                                # Update assignees
-                                if task.get('assignees'):
-                                    assignee_ids = [self._get_user_mapping(a) for a in task['assignees']]
-                                    self.tallyfy_client.update_task_assignees(
-                                        run_id=created_process['id'],
-                                        task_id=task['id'],
-                                        assignee_ids=assignee_ids
-                                    )
-                                
-                                results['tasks']['successful'] += 1
-                                
-                            except Exception as e:
-                                logger.error(f"Failed to migrate task {task.get('name')}: {e}")
-                                results['tasks']['failed'] += 1
+                        # Task-state migration is disabled: the loop body
+                        # uses Rocketlane ids as Tallyfy task ids (no mapping
+                        # exists), passes an unsupported `data=` kwarg to
+                        # complete_task, checks a non-existent `completed`
+                        # flag, and calls update_task_assignees which is not
+                        # implemented.  Re-enable once proper task-id mapping
+                        # and correct Tallyfy calls are in place.
+                        # tasks = self.rocketlane_client.get_tasks(project['id'])
                         
                         # Migrate time tracking if enabled
                         if os.getenv('MIGRATE_TIME_TRACKING', 'true').lower() == 'true':
