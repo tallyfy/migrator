@@ -67,14 +67,49 @@ def _signature(fn):
     return positional, keyword_only, required, args.vararg is not None, args.kwarg is not None
 
 
+def _imported_from(vendor, class_name):
+    """Which module does main.py actually import this class from?
+
+    This has to be import-aware, and the reason is concrete: process-street
+    defines ProcessStreetClient TWICE --
+
+        src/api/ps_client.py             __init__(api_key, base_url, organization_id)
+        src/api/process_street_client.py __init__(api_key, base_url)
+
+    -- and main.py imports the first. An earlier version of this gate scanned
+    src/api/*.py with glob and took whichever matched first. glob order is
+    filesystem-dependent, so it resolved to ps_client.py on macOS and to
+    process_street_client.py on CI, and reported a bug that does not exist.
+    A gate whose verdict depends on directory ordering is worse than no gate.
+    """
+    main_path = os.path.join(REPO_ROOT, vendor, 'src', 'main.py')
+    tree = ast.parse(open(main_path).read())
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or node.module is None:
+            continue
+        if not any(a.name == class_name for a in node.names):
+            continue
+        # `api.ps_client`, `src.api.ps_client` and `.api.ps_client` all mean
+        # <vendor>/src/api/ps_client.py.
+        parts = [p for p in node.module.split('.') if p and p != 'src']
+        return os.path.join(REPO_ROOT, vendor, 'src', *parts) + '.py'
+    return None
+
+
 def _find_init(vendor, class_name):
-    for path in glob.glob(os.path.join(REPO_ROOT, vendor, 'src', 'api', '*.py')):
-        tree = ast.parse(open(path).read())
+    path = _imported_from(vendor, class_name)
+    candidates = [path] if path and os.path.exists(path) else []
+    if not candidates:
+        # Not imported by name (defined in main.py itself, or a star import).
+        candidates = sorted(glob.glob(os.path.join(REPO_ROOT, vendor, 'src', '**', '*.py'), recursive=True))
+
+    for candidate in candidates:
+        tree = ast.parse(open(candidate).read())
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef) and node.name == class_name:
                 for item in node.body:
                     if isinstance(item, ast.FunctionDef) and item.name == '__init__':
-                        return item, os.path.relpath(path, REPO_ROOT)
+                        return item, os.path.relpath(candidate, REPO_ROOT)
     return None, None
 
 
@@ -137,3 +172,23 @@ class TestEveryClientConstructionBinds:
         positional, keyword_only, required, _, _ = _signature(init)
         assert positional == ['a', 'b']
         assert required == ['a'], 'a parameter with a default must not count as required'
+
+
+class TestTheResolverFollowsImportsNotGlobOrder:
+    """process-street defines ProcessStreetClient twice, with DIFFERENT
+    signatures. Resolving by scan order made this gate's verdict depend on
+    the filesystem: it passed on macOS and failed on CI, on identical code."""
+
+    def test_both_definitions_still_exist(self):
+        a = os.path.join(REPO_ROOT, 'process-street', 'src', 'api', 'ps_client.py')
+        b = os.path.join(REPO_ROOT, 'process-street', 'src', 'api', 'process_street_client.py')
+        assert 'class ProcessStreetClient' in open(a).read()
+        assert 'class ProcessStreetClient' in open(b).read()
+
+    def test_the_resolver_picks_the_imported_one(self):
+        _, defined_in = _find_init('process-street', 'ProcessStreetClient')
+        assert defined_in == 'process-street/src/api/ps_client.py', (
+            f'main.py does `from api.ps_client import ProcessStreetClient`, but '
+            f'the resolver chose {defined_in}. Only ps_client.py takes '
+            f'organization_id, so picking the other one invents a bug.'
+        )
