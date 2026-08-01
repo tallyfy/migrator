@@ -355,18 +355,15 @@ class PipefyMigrationOrchestrator:
         
         for member in self.progress.track(members, description="Migrating users"):
             try:
-                user = member.get('user', {})
-                
-                # Transform user
+                # list_users() already flattens each member into a user dict
+                # with top-level keys: email, name, username, id, role.
                 tallyfy_user = {
-                    # Pipefy returns the address under `email` (see the members
-                    # query in pipefy_client.py:284).
-                    "text": user.get('email'),
-                    'first_name': user.get('name', '').split()[0] if user.get('name') else '',
-                    'last_name': ' '.join(user.get('name', '').split()[1:]) if user.get('name') else '',
-                    'username': user.get('username'),
-                    'external_ref': user.get('id'),
-                    'role': member.get('role_name', 'member')
+                    "text": member.get('email'),
+                    'first_name': member.get('name', '').split()[0] if member.get('name') else '',
+                    'last_name': ' '.join(member.get('name', '').split()[1:]) if member.get('name') else '',
+                    'username': member.get('username'),
+                    'external_ref': member.get('id'),
+                    'role': member.get('role', 'member')
                 }
                 
                 # Check if user exists
@@ -374,13 +371,13 @@ class PipefyMigrationOrchestrator:
                 
                 if existing:
                     logger.debug(f"User already exists: {tallyfy_user['text']}")
-                    self.id_mapper.add_mapping(user['id'], existing['id'], 'user')
+                    self.id_mapper.add_mapping(member['id'], existing['id'], 'user')
                     successful += 1
                 else:
                     # Create user in Tallyfy
                     created = self.tallyfy_client.create_user(tallyfy_user)
                     logger.debug(f"Created user: {tallyfy_user['text']}")
-                    self.id_mapper.add_mapping(user['id'], created['id'], 'user')
+                    self.id_mapper.add_mapping(member['id'], created['id'], 'user')
                     successful += 1
                 
             except Exception as e:
