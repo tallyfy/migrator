@@ -866,8 +866,8 @@ def main():
         # Initialize clients
         monday_client = MondayClient(api_token=args.api_token)
         tallyfy_client = TallyfyClient(
-            api_key=args.tallyfy_key,
-            organization=args.tallyfy_org
+            api_token=args.tallyfy_key,
+            organization_id=args.tallyfy_org
         )
         
         # Create migrator

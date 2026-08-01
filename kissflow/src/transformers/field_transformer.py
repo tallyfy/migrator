@@ -74,10 +74,11 @@ class FieldTransformer:
     # plus url and phone (the two trailing comments in FIELD_TYPE_MAP above).
     #
     # Their BODIES were flattened to an identical {'type': "text"} as well, so
-    # the per-type patterns are NOT recoverable here (#6). The reference shape
-    # is monday/src/transformers/field_transformer.py's FIELD_VALIDATIONS, which
-    # kept its regexes. Restoring the keys makes the lookup reachable again
-    # without inventing rules that were never written down.
+    # the per-type patterns are NOT recoverable here (#6). The shape a restored
+    # entry should take is {'type': 'text', 'pattern': <regex>} -- the same
+    # shape the surviving 'currency' entry below uses for its 'format' key.
+    # Restoring the keys makes the lookup reachable again without inventing
+    # rules that were never written down.
     FIELD_VALIDATIONS = {
         'email': {'type': "text"},
         'url': {'type': "text"},

@@ -47,7 +47,7 @@ class TypeformMigrator:
         self.typeform = TypeformClient(config['typeform_api_key'])
         self.tallyfy = TallyfyClient(
             api_key=config['tallyfy_api_key'],
-            organization_id=config['tallyfy_org_id']
+            organization=config['tallyfy_org_id']
         )
         
         # Initialize AI client (optional)
