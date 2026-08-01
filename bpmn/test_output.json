@@ -1,6 +1,6 @@
 {
   "source_file": "test_process.bpmn",
-  "timestamp": "2025-08-16T15:30:10.969644",
+  "timestamp": "2026-08-01T10:12:17.671411+00:00",
   "summary": {
     "total_processes": 1,
     "total_elements": 12,
@@ -242,7 +242,7 @@
       "groups": [],
       "metadata": {
         "bpmn_process_id": "Process_1",
-        "migration_timestamp": "2025-08-16T15:30:10.972364",
+        "migration_timestamp": "2026-08-01T10:12:17.676266+00:00",
         "migration_version": "1.0"
       },
       "migration_details": {
