@@ -35,6 +35,7 @@ keyed on, the value they produce must be a field type the API will accept.
 import importlib.util
 import os
 import sys
+import types
 
 import pytest
 
@@ -78,10 +79,32 @@ CONTEXTS = [
 ]
 
 
+def _stub_anthropic_if_absent():
+    """Let this run without the Anthropic SDK installed.
+
+    Every `ai_client.py` imports `anthropic` at module level, but the function
+    under test is pure branching logic that never touches the SDK -- and it is
+    specifically the path taken when no API key is configured. Requiring the
+    real package would mean this gate only runs where someone happens to have
+    it installed, which is exactly how the defect survived: it lived in the
+    no-key fallback that nothing exercised.
+    """
+    if 'anthropic' in sys.modules:
+        return
+    try:
+        import anthropic  # noqa: F401
+    except ImportError:
+        stub = types.ModuleType('anthropic')
+        stub.Anthropic = object
+        stub.APIError = Exception
+        sys.modules['anthropic'] = stub
+
+
 def _load_ai_client(vendor):
     path = os.path.join(REPO_ROOT, vendor, 'src', 'api', 'ai_client.py')
     if not os.path.exists(path):
         pytest.skip(f'{vendor} has no ai_client.py')
+    _stub_anthropic_if_absent()
     module_name = f'_ai_client_{vendor.replace("-", "_")}'
     spec = importlib.util.spec_from_file_location(module_name, path)
     module = importlib.util.module_from_spec(spec)
