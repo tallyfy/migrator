@@ -102,7 +102,6 @@ KNOWN_MISSING = [
     ('rocketlane', 'ErrorHandler', 'handle_error'),
     ('rocketlane', 'InstanceTransformer', 'transform_time_entry_to_comment'),
     ('rocketlane', 'RocketLaneClient', 'get_project_template'),
-    ('rocketlane', 'RocketLaneClient', 'get_stats'),
     ('rocketlane', 'TallyfyClient', 'create_comment'),
     ('rocketlane', 'TallyfyClient', 'create_kickoff_form'),
     ('rocketlane', 'TallyfyClient', 'create_organization'),

@@ -178,6 +178,8 @@ class ClickUpClient:
         response = self._make_request('GET', f'/team/{self.workspace_id}/field')
         return response.get('fields', [])
     
+    ROLE_INT_TO_STR = {1: 'owner', 2: 'admin', 3: 'member', 4: 'guest'}
+
     # User Management  
     def get_users(self) -> List[Dict[str, Any]]:
         """Get all users in workspace"""
@@ -186,7 +188,8 @@ class ClickUpClient:
         users = []
         for member in members:
             user = member.get('user', {})
-            user['role'] = member.get('role')
+            raw_role = member.get('role') or user.get('role')
+            user['role'] = self.ROLE_INT_TO_STR.get(raw_role, str(raw_role) if raw_role is not None else '')
             users.append(user)
         return users
     
