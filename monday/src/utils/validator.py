@@ -265,7 +265,7 @@ class Validator:
             if field not in user or not user[field]:
                 errors.append(f"Missing required field: {field}")
         
-        # Validate short_text
+        # Validate email -- `text` is the Tallyfy email key
         if "text" in user:
             if not self.EMAIL_PATTERN.match(user["text"]):
                 errors.append(f"Invalid email format: {user['text']}")
@@ -275,10 +275,12 @@ class Validator:
             if user['role'] not in self.VALID_USER_ROLES:
                 errors.append(f"Invalid user role: {user['role']}")
         
-        # Validate short_text if present
-        if "text" in user and user["text"]:
-            if not self.PHONE_PATTERN.match(user["text"]):
-                warnings.append(f"Phone number may be invalid: {user['text']}")
+        # Validate phone if present. This ran PHONE_PATTERN against `text`,
+        # which is the EMAIL key checked above, so every user was warned that
+        # their email address was an invalid phone number.
+        if 'phone' in user and user['phone']:
+            if not self.PHONE_PATTERN.match(user['phone']):
+                warnings.append(f"Phone number may be invalid: {user['phone']}")
         
         # Check name length
         if 'firstname' in user:

@@ -7,6 +7,7 @@ from src.transformers.field_transformer import FieldTransformer
 from src.transformers.board_transformer import BoardTransformer
 from src.transformers.user_transformer import UserTransformer
 from src.transformers.instance_transformer import InstanceTransformer
+from src.utils.validator import Validator
 
 
 class TestFieldTransformer(unittest.TestCase):
@@ -501,3 +502,40 @@ def run_tests():
 
 if __name__ == '__main__':
     run_tests()
+
+class TestUserValidation(unittest.TestCase):
+    """Regression: the phone check was pointed at the email key."""
+
+    def setUp(self):
+        self.validator = Validator()
+
+    def test_a_valid_email_does_not_warn_about_a_phone_number(self):
+        """`text` is the Tallyfy EMAIL key.
+
+        The phone check ran PHONE_PATTERN against `text`, which the check above
+        it had already validated as an email, so every Monday user was warned
+        that their email address was an invalid phone number.
+        """
+        result = self.validator.validate_user({
+            'text': 'jane@example.com',
+            'firstname': 'Jane',
+            'lastname': 'Doe',
+        })
+
+        phone_warnings = [
+            w for w in result.get('warnings', []) if 'Phone number' in w
+        ]
+        self.assertEqual(phone_warnings, [])
+
+    def test_a_bad_phone_still_warns(self):
+        result = self.validator.validate_user({
+            'text': 'jane@example.com',
+            'firstname': 'Jane',
+            'lastname': 'Doe',
+            'phone': 'not-a-phone',
+        })
+
+        self.assertTrue(
+            any('Phone number' in w for w in result.get('warnings', [])),
+            'a genuinely invalid phone number must still be reported'
+        )
