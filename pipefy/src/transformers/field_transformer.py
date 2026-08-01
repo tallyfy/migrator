@@ -212,14 +212,14 @@ class FieldTransformer:
         elif field_type == 'time':
             return self._format_time(value)
         
-        elif field_type == "text":
-            # Validate and clean short_text
+        elif field_type == 'email':
+            # Validate and clean email
             if isinstance(value, str) and '@' in value:
                 return value.strip().lower()
             return value
         
-        elif field_type == "text":
-            # Clean short_text short_text
+        elif field_type == 'phone':
+            # Clean phone number
             if isinstance(value, str):
                 return re.sub(r'[^\d+\-() ]', '', value)
             return value
@@ -313,13 +313,15 @@ class FieldTransformer:
             validation['pattern'] = field['custom_validation']
         
         # Type-specific validations
-        if field_type == "text":
+        # Each branch is identified by its own body. All three were keyed
+        # "text", so only email_format could ever be applied.
+        if field_type == 'email':
             validation['email_format'] = True
         
-        elif field_type == "text":
+        elif field_type == 'phone':
             validation['phone_format'] = 'international'
         
-        elif field_type == "text":
+        elif field_type == 'number':
             if field.get('min_value') is not None:
                 validation['min_value'] = field['min_value']
             if field.get('max_value') is not None:

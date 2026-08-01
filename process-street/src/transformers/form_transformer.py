@@ -132,7 +132,9 @@ class FormTransformer(BaseTransformer):
         elif field_type == "multiselect":
             return bool(default_value)
         
-        elif field_type == "text":
+        elif field_type == 'number':
+            # Keyed "text" before: a text field's default was coerced to a
+            # float, or silently replaced with 0 when it would not parse.
             try:
                 return float(default_value)
             except (ValueError, TypeError):
@@ -176,17 +178,21 @@ class FormTransformer(BaseTransformer):
             tallyfy_validation['error_message'] = ps_validation['customMessage']
         
         # Type-specific validations
-        if field_type == "text":
+        # Each branch below is identified by its own body: email_format,
+        # url_format, phone_format, min/max. All four were keyed "text", so only
+        # the first could ever run -- every validated field got email_format,
+        # and the url, phone and numeric rules were unreachable.
+        if field_type == 'email':
             tallyfy_validation['email_format'] = True
         
-        elif field_type == "text":
+        elif field_type == 'url':
             tallyfy_validation['url_format'] = True
             tallyfy_validation['allowed_protocols'] = ps_validation.get('allowedProtocols', ['http', 'https'])
         
-        elif field_type == "text":
+        elif field_type == 'phone':
             tallyfy_validation['phone_format'] = ps_validation.get('phoneFormat', 'international')
         
-        elif field_type == "text":
+        elif field_type == 'number':
             if 'min' in ps_validation:
                 tallyfy_validation['min_value'] = ps_validation['min']
             if 'max' in ps_validation:
