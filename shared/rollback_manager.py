@@ -423,18 +423,34 @@ class RollbackManager:
         if not self.tallyfy_client:
             raise ValueError("Tallyfy client required for delete operation")
         
-        # Determine delete method based on resource type
+        # Resolve by NAME, not by attribute access.
+        #
+        # This dict used to hold `self.tallyfy_client.delete_user` and friends
+        # directly. A dict literal is built eagerly, so every one of those
+        # attribute lookups ran BEFORE `.get()` chose one -- and none of these
+        # four methods is defined by any of the 17 vendor clients. So any
+        # rollback of any resource type raised AttributeError on this line,
+        # and the `if not delete_method` guard below could never be reached.
         delete_methods = {
-            ResourceType.USER: self.tallyfy_client.delete_user,
-            ResourceType.TEMPLATE: self.tallyfy_client.delete_template,
-            ResourceType.INSTANCE: self.tallyfy_client.delete_instance,
-            ResourceType.STEP: self.tallyfy_client.delete_step,
+            ResourceType.USER: 'delete_user',
+            ResourceType.TEMPLATE: 'delete_template',
+            ResourceType.INSTANCE: 'delete_instance',
+            ResourceType.STEP: 'delete_step',
         }
-        
-        delete_method = delete_methods.get(action.resource_type)
-        if not delete_method:
+
+        method_name = delete_methods.get(action.resource_type)
+        if not method_name:
             raise ValueError(f"No delete method for {action.resource_type.value}")
-        
+
+        delete_method = getattr(self.tallyfy_client, method_name, None)
+        if delete_method is None:
+            raise NotImplementedError(
+                f"{type(self.tallyfy_client).__name__} does not implement "
+                f"{method_name}(), so a {action.resource_type.value} created by "
+                f"this migration cannot be rolled back automatically. "
+                f"Remove it manually: {action.resource_id}"
+            )
+
         delete_method(action.resource_id)
         self.logger.info(f"Deleted {action.resource_type.value}: {action.resource_id}")
     
@@ -443,18 +459,34 @@ class RollbackManager:
         if not self.tallyfy_client:
             raise ValueError("Tallyfy client required for restore operation")
         
-        # Determine create method based on resource type
+        # Same eager-lookup bug as _delete_resource, plus two wrong names:
+        # `create_template` and `create_instance` are defined by NONE of the 17
+        # vendor clients. The methods that do exist are `create_checklist`
+        # (14/17) and `create_process` (6/17), so those are tried first and the
+        # old names are kept as fallbacks for any client that grows them.
         create_methods = {
-            ResourceType.USER: self.tallyfy_client.create_user,
-            ResourceType.TEMPLATE: self.tallyfy_client.create_template,
-            ResourceType.INSTANCE: self.tallyfy_client.create_instance,
-            ResourceType.STEP: self.tallyfy_client.create_step,
+            ResourceType.USER: ('create_user', 'create_member'),
+            ResourceType.TEMPLATE: ('create_checklist', 'create_blueprint', 'create_template'),
+            ResourceType.INSTANCE: ('create_process', 'create_instance'),
+            ResourceType.STEP: ('create_step',),
         }
-        
-        create_method = create_methods.get(action.resource_type)
-        if not create_method:
+
+        candidates = create_methods.get(action.resource_type)
+        if not candidates:
             raise ValueError(f"No create method for {action.resource_type.value}")
-        
+
+        create_method = next(
+            (m for m in (getattr(self.tallyfy_client, n, None) for n in candidates) if m),
+            None,
+        )
+        if create_method is None:
+            raise NotImplementedError(
+                f"{type(self.tallyfy_client).__name__} implements none of "
+                f"{', '.join(n + '()' for n in candidates)}, so a deleted "
+                f"{action.resource_type.value} cannot be restored automatically: "
+                f"{action.resource_id}"
+            )
+
         create_method(action.original_data)
         self.logger.info(f"Restored {action.resource_type.value}: {action.resource_id}")
     
@@ -463,17 +495,32 @@ class RollbackManager:
         if not self.tallyfy_client:
             raise ValueError("Tallyfy client required for update operation")
         
-        # Determine update method based on resource type
+        # Same eager-lookup bug as _delete_resource and _restore_resource:
+        # a dict literal evaluates every value before it is indexed, so one
+        # missing method broke all four resource types and made the guard
+        # below unreachable. Resolve by name instead.
         update_methods = {
-            ResourceType.USER: self.tallyfy_client.update_user,
-            ResourceType.TEMPLATE: self.tallyfy_client.update_template,
-            ResourceType.INSTANCE: self.tallyfy_client.update_instance,
-            ResourceType.STEP: self.tallyfy_client.update_step,
+            ResourceType.USER: ('update_user', 'update_member'),
+            ResourceType.TEMPLATE: ('update_checklist', 'update_template'),
+            ResourceType.INSTANCE: ('update_process', 'update_instance'),
+            ResourceType.STEP: ('update_step',),
         }
-        
-        update_method = update_methods.get(action.resource_type)
-        if not update_method:
+
+        candidates = update_methods.get(action.resource_type)
+        if not candidates:
             raise ValueError(f"No update method for {action.resource_type.value}")
+
+        update_method = next(
+            (m for m in (getattr(self.tallyfy_client, n, None) for n in candidates) if m),
+            None,
+        )
+        if update_method is None:
+            raise NotImplementedError(
+                f"{type(self.tallyfy_client).__name__} implements none of "
+                f"{', '.join(n + '()' for n in candidates)}, so a modified "
+                f"{action.resource_type.value} cannot be reverted automatically: "
+                f"{action.resource_id}"
+            )
         
         update_method(action.resource_id, action.original_data)
         self.logger.info(f"Reverted {action.resource_type.value}: {action.resource_id}")

@@ -363,7 +363,7 @@ class KissflowMigrator:
         for dataset in datasets:
             try:
                 # Get dataset records
-                records = self.kissflow_client.get_dataset_records(dataset['Id'])
+                records = self.kissflow_client.get_dataset_rows(dataset['Id'])
                 
                 # Transform dataset
                 blueprint = self.dataset_transformer.transform_dataset_to_blueprint(

@@ -343,7 +343,7 @@ class PipefyMigrationOrchestrator:
         logger.info("Migrating users...")
         
         # Get organization members
-        members = self.pipefy_client.get_organization_members()
+        members = self.pipefy_client.list_users()
         logger.info(f"Found {len(members)} users to migrate")
         
         if dry_run:
@@ -714,7 +714,7 @@ class PipefyMigrationOrchestrator:
         """Webhooks migration phase"""
         logger.info("Migrating webhooks...")
         
-        webhooks = self.pipefy_client.list_webhooks(pipe_id)
+        webhooks = self.pipefy_client.get_webhooks(pipe_id)
         logger.info(f"Found {len(webhooks)} webhooks to migrate")
         
         if dry_run:

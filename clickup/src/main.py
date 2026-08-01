@@ -223,7 +223,7 @@ class ClickUpMigrationOrchestrator:
             
             # Discover users
             logger.info("Discovering users...")
-            discovery_data['users'] = self.clickup_client.get_team_members()
+            discovery_data['users'] = self.clickup_client.get_users()
             
             # Calculate statistics
             discovery_data['statistics'] = {

@@ -179,7 +179,7 @@ class GoogleFormsMigrationOrchestrator(FormMigratorBase):
             
             # Discover forms
             logger.info("Discovering forms...")
-            discovery_data['forms'] = self.google_forms_client.list_forms()
+            discovery_data['forms'] = self.google_forms_client.get_forms()
             
             # Get detailed form data and sample responses
             for form in discovery_data['forms'][:10]:  # Sample first 10 forms

@@ -231,12 +231,12 @@ class RocketLaneMigrationOrchestrator:
         try:
             # Fetch customers
             logger.info("Fetching customers...")
-            discovery['customers'] = self.rocketlane_client.list_customers()
+            discovery['customers'] = self.rocketlane_client.get_customers()
             discovery['counts']['customers'] = len(discovery['customers'])
             
             # Fetch projects
             logger.info("Fetching projects...")
-            discovery['projects'] = self.rocketlane_client.list_projects(
+            discovery['projects'] = self.rocketlane_client.get_projects(
                 include_archived=os.getenv('MIGRATE_ARCHIVED', 'false').lower() == 'true'
             )
             discovery['counts']['projects'] = len(discovery['projects'])
@@ -244,22 +244,22 @@ class RocketLaneMigrationOrchestrator:
             
             # Fetch project templates
             logger.info("Fetching project templates...")
-            discovery['templates'] = self.rocketlane_client.list_project_templates()
+            discovery['templates'] = self.rocketlane_client.get_project_templates()
             discovery['counts']['templates'] = len(discovery['templates'])
             
             # Fetch forms and surveys
             logger.info("Fetching forms and surveys...")
-            discovery['forms'] = self.rocketlane_client.list_forms()
+            discovery['forms'] = self.rocketlane_client.get_forms()
             discovery['counts']['forms'] = len(discovery['forms'])
             
             # Fetch users and resources
             logger.info("Fetching users and resources...")
-            discovery['users'] = self.rocketlane_client.list_users()
+            discovery['users'] = self.rocketlane_client.get_users()
             discovery['counts']['users'] = len(discovery['users'])
             
             # Fetch custom fields
             logger.info("Fetching custom fields...")
-            discovery['custom_fields'] = self.rocketlane_client.list_custom_fields()
+            discovery['custom_fields'] = self.rocketlane_client.get_custom_fields()
             discovery['counts']['custom_fields'] = len(discovery['custom_fields'])
             
             # Analyze paradigm shifts needed
@@ -541,7 +541,7 @@ class RocketLaneMigrationOrchestrator:
                     
                     try:
                         # Get full project details
-                        full_project = self.rocketlane_client.get_project(project['id'])
+                        full_project = self.rocketlane_client.get_project_details(project['id'])
 
                         # Resolve the target template FIRST: transforming the
                         # project needs the template's kick-off field definitions
@@ -836,7 +836,7 @@ class RocketLaneMigrationOrchestrator:
             'phases': results,
             'statistics': {
                 'total_api_calls': self.rocketlane_client.get_stats()['api_calls'] + 
-                                 self.tallyfy_client.get_stats()['api_calls'],
+                                 self.tallyfy_client.get_statistics()['api_calls'],
                 'ai_decisions': sum(len(r.get('ai_decisions', [])) for r in results.values()),
                 'errors': self.error_handler.get_error_count()
             },
