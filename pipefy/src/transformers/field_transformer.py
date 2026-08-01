@@ -230,7 +230,7 @@ class FieldTransformer:
                 return value.get('id') or value.get('value')
             return value
         
-        elif field_type in ["multiselect", 'multiselect']:
+        elif field_type in ['multiselect']:
             # Multiple selection - return array of values
             if isinstance(value, str):
                 # Parse JSON array if string

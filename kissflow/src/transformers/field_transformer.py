@@ -304,10 +304,16 @@ class FieldTransformer:
         field_type = field.get('Type', "text").lower()
         
         # Handle different field types
-        if field_type in ["text", "textarea", 'rich_text', "text", "text", "text"]:
+        # The string branch carried four duplicate "text" entries; three distinct
+        # source types collapsed into it and are not recoverable (#6).
+        # Deduplicating is inert -- membership is unchanged.
+        if field_type in ['text', 'textarea', 'rich_text']:
             return str(value)
         
-        elif field_type in ["text", 'currency', 'rating', 'slider']:
+        # Keyed "text" before, which the branch above already matched, so this
+        # never ran: numeric values were stringified instead of coerced. The
+        # body (float) and its siblings name the type.
+        elif field_type in ['number', 'currency', 'rating', 'slider']:
             try:
                 return float(value)
             except (TypeError, ValueError):

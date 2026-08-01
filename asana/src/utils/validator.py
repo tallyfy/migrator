@@ -152,7 +152,9 @@ class MigrationValidator:
         if not field.get('name'):
             errors.append("Custom field missing name")
         
-        valid_types = ["text", "text", 'enum', 'multi_enum', 'date', 'people', 'formula', 'currency']
+        # 'number' was collapsed onto a duplicate "text", so every Asana number
+        # custom field was reported as an unknown type.
+        valid_types = ['text', 'number', 'enum', 'multi_enum', 'date', 'people', 'formula', 'currency']
         field_type = field.get('type')
         if field_type not in valid_types:
             errors.append(f"Unknown custom field type: {field_type}")
