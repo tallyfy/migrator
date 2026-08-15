@@ -214,11 +214,11 @@ named a vendor the other's new gate forbade). CI only ever sees one branch. When
 several PRs touch one file family, run the suite on the merged tree before declaring
 done.
 
-Cursor Bugbot reviews each push and can push Autofix commits of its own -- reconcile
-by merge, never force-push, and verify each finding against the source before
-adopting it. It has been right about real bugs here (a doubled `/api` in an env file,
-a client returning the wrong user shape) and has also had to revert its own commit
-after it turned a dead loop into an executing broken one.
+No external review bot runs here. Cursor Bugbot was retired org-wide 2026-08-15.
+tallyfy-bugbot (in tallyfy/code-reviewer) will cover this repo in a later rollout
+wave; until then adversarial self-review applies. The durable half of the old rule
+stands: if any bot ever pushes commits to your branch, reconcile by merge, never
+force-push.
 
 `shared/tests/test_prerun_request_key.py` pins the request key across every vendor client.
 `shared/tests/test_prerun_wiring.py` pins that the encoder is actually REACHED on live
