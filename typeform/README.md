@@ -96,9 +96,8 @@ VARIABLE_HANDLING=process_data  # Options: process_data, calculated_fields, meta
 ```env
 # Anthropic API for intelligent form splitting decisions
 ANTHROPIC_API_KEY=sk-ant-api03-...  # REQUIRED for form analysis
-AI_MODEL=claude-3-haiku-20240307
-AI_TEMPERATURE=0
-AI_MAX_TOKENS=500
+AI_MODEL=claude-opus-5-5
+AI_MAX_TOKENS=16000
 
 # AI Feature Flags
 AI_ANALYZE_FORM_COMPLEXITY=true  # Determine if form needs splitting

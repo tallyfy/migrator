@@ -93,9 +93,8 @@ MAX_RESPONSES_PER_SURVEY=50
 ```env
 # Anthropic API for intelligent survey splitting decisions
 ANTHROPIC_API_KEY=sk-ant-api03-...  # REQUIRED for survey analysis
-AI_MODEL=claude-opus-4-6
-AI_TEMPERATURE=0
-AI_MAX_TOKENS=500
+AI_MODEL=claude-opus-5-5
+AI_MAX_TOKENS=16000
 ```
 
 ## Quick Start

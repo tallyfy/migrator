@@ -99,9 +99,8 @@ MIGRATE_ENTRIES=true
 ```env
 # Anthropic API (REQUIRED for complex forms)
 ANTHROPIC_API_KEY=sk-ant-api03-...
-AI_MODEL=claude-3-haiku-20240307
-AI_TEMPERATURE=0
-AI_MAX_TOKENS=500
+AI_MODEL=claude-opus-5-5
+AI_MAX_TOKENS=16000
 
 # AI Features
 AI_ANALYZE_CALCULATIONS=true  # Analyze calculation complexity

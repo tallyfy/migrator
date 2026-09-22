@@ -98,9 +98,8 @@ CALCULATION_HANDLING=process_data  # Options: process_data, one_time, skip
 ```env
 # Anthropic API for intelligent form analysis
 ANTHROPIC_API_KEY=sk-ant-api03-...  # REQUIRED for form splitting
-AI_MODEL=claude-3-haiku-20240307
-AI_TEMPERATURE=0
-AI_MAX_TOKENS=500
+AI_MODEL=claude-opus-5-5
+AI_MAX_TOKENS=16000
 
 # AI Feature Flags
 AI_ANALYZE_COMPLEXITY=true  # Analyze form structure

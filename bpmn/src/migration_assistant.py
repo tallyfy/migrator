@@ -24,6 +24,29 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# Both calls below stay on Haiku 4.5. They send no sampling parameter, because
+# anthropic 1.x has no temperature argument and raises TypeError on one, and no
+# effort, because Haiku 4.5 returns a 400 for it.
+def _response_text(response) -> str:
+    """Join the text blocks of a Messages API response.
+
+    The first block is not guaranteed to be text. An empty join (a refusal, or a
+    reply with no text) is a failure, never valid content, so it raises and the
+    caller takes its existing fallback.
+    """
+    text = ''.join(
+        getattr(block, 'text', '') or ''
+        for block in (getattr(response, 'content', None) or [])
+        if getattr(block, 'type', None) == 'text'
+    )
+    if not text.strip():
+        raise ValueError(
+            'AI response carried no text '
+            f"(stop_reason={getattr(response, 'stop_reason', None)})"
+        )
+    return text
+
+
 @dataclass
 class MigrationDecision:
     """Represents an AI migration decision"""
@@ -103,7 +126,6 @@ class ClaudeAIMigrationAssistant:
             response = self.client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=1000,
-                temperature=0,
                 system="""You are an expert in BPMN to Tallyfy migration. Analyze BPMN elements and provide migration strategies.
                 
 Tallyfy supports:
@@ -130,7 +152,7 @@ Respond with JSON only, following this structure:
             )
             
             # Parse AI response
-            result = self._parse_ai_response(response.content[0].text, element)
+            result = self._parse_ai_response(_response_text(response), element)
             return result
             
         except Exception as e:
@@ -283,14 +305,13 @@ Respond with specific, actionable recommendations in JSON format."""
         try:
             response = self.client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=1500,
-                temperature=0.3,
+                max_tokens=8000,
                 system="You are a process optimization expert specializing in BPMN to Tallyfy migration.",
                 messages=[{"role": "user", "content": prompt}]
             )
             
             # Parse response
-            text = response.content[0].text
+            text = _response_text(response)
             import re
             json_match = re.search(r'\{.*\}', text, re.DOTALL)
             if json_match:
