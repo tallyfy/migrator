@@ -12,6 +12,29 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+# These clients call claude-opus-5-5, which rejects sampling parameters and always thinks.
+# Effort goes through extra_body as {'output_config': {'effort': 'medium'}} so it
+# works on old anthropic SDK versions as well as new ones.
+def _response_text(response) -> str:
+    """Join the text blocks of a Messages API response.
+
+    A reply can open with thinking blocks, so the first block is not guaranteed to
+    be text. An empty join (a refusal, or max_tokens spent entirely on thinking) is
+    a failure, never valid content, so it raises and the caller takes its fallback.
+    """
+    text = ''.join(
+        getattr(block, 'text', '') or ''
+        for block in (getattr(response, 'content', None) or [])
+        if getattr(block, 'type', None) == 'text'
+    )
+    if not text.strip():
+        raise ValueError(
+            'AI response carried no text '
+            f"(stop_reason={getattr(response, 'stop_reason', None)})"
+        )
+    return text
+
+
 class AIClient:
     """AI client for intelligent BPMN migration decisions"""
     
@@ -93,9 +116,9 @@ class AIClient:
             
             # Make AI call
             response = self.client.messages.create(
-                model="claude-opus-4-6",
-                max_tokens=500,
-                temperature=0,
+                model="claude-opus-5-5",
+                max_tokens=16000,
+                extra_body={'output_config': {'effort': 'medium'}},
                 system="You are an expert in BPMN to workflow transformation. Respond with JSON only.",
                 messages=[{"role": "user", "content": formatted_prompt}]
             )
@@ -103,7 +126,7 @@ class AIClient:
             self.stats['ai_calls'] += 1
             
             # Parse response
-            result = self._extract_json(response.content[0].text)
+            result = self._extract_json(_response_text(response))
             
             # Cache result
             self.decision_cache[cache_key] = result
@@ -153,9 +176,9 @@ class AIClient:
             
             # Make AI call
             response = self.client.messages.create(
-                model="claude-opus-4-6",
-                max_tokens=1000,
-                temperature=0,
+                model="claude-opus-5-5",
+                max_tokens=16000,
+                extra_body={'output_config': {'effort': 'medium'}},
                 system="You are an expert in business process optimization. Respond with JSON only.",
                 messages=[{"role": "user", "content": formatted_prompt}]
             )
@@ -163,7 +186,7 @@ class AIClient:
             self.stats['ai_calls'] += 1
             
             # Parse response
-            return self._extract_json(response.content[0].text)
+            return self._extract_json(_response_text(response))
             
         except Exception as e:
             logger.error(f"AI process transformation failed: {e}")
@@ -203,9 +226,9 @@ class AIClient:
             
             # Make AI call
             response = self.client.messages.create(
-                model="claude-opus-4-6",
-                max_tokens=500,
-                temperature=0,
+                model="claude-opus-5-5",
+                max_tokens=16000,
+                extra_body={'output_config': {'effort': 'medium'}},
                 system="You are an expert in workflow event handling. Respond with JSON only.",
                 messages=[{"role": "user", "content": formatted_prompt}]
             )
@@ -213,7 +236,7 @@ class AIClient:
             self.stats['ai_calls'] += 1
             
             # Parse response
-            return self._extract_json(response.content[0].text)
+            return self._extract_json(_response_text(response))
             
         except Exception as e:
             logger.error(f"AI event mapping failed: {e}")
@@ -260,9 +283,9 @@ class AIClient:
             
             # Make AI call
             response = self.client.messages.create(
-                model="claude-opus-4-6",
-                max_tokens=500,
-                temperature=0,
+                model="claude-opus-5-5",
+                max_tokens=16000,
+                extra_body={'output_config': {'effort': 'medium'}},
                 system="You are an expert in organizational role mapping. Respond with JSON only.",
                 messages=[{"role": "user", "content": formatted_prompt}]
             )
@@ -270,7 +293,7 @@ class AIClient:
             self.stats['ai_calls'] += 1
             
             # Parse response
-            return self._extract_json(response.content[0].text)
+            return self._extract_json(_response_text(response))
             
         except Exception as e:
             logger.error(f"AI lane mapping failed: {e}")
@@ -305,9 +328,9 @@ class AIClient:
             
             # Make AI call
             response = self.client.messages.create(
-                model="claude-opus-4-6",
-                max_tokens=500,
-                temperature=0,
+                model="claude-opus-5-5",
+                max_tokens=16000,
+                extra_body={'output_config': {'effort': 'medium'}},
                 system="You are an expert in workflow loop handling. Respond with JSON only.",
                 messages=[{"role": "user", "content": formatted_prompt}]
             )
@@ -315,7 +338,7 @@ class AIClient:
             self.stats['ai_calls'] += 1
             
             # Parse response
-            return self._extract_json(response.content[0].text)
+            return self._extract_json(_response_text(response))
             
         except Exception as e:
             logger.error(f"AI loop handling failed: {e}")

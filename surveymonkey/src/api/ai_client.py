@@ -13,15 +13,37 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+# These clients call claude-opus-5-5, which rejects sampling parameters and always thinks.
+# Effort goes through extra_body as {'output_config': {'effort': 'medium'}} so it
+# works on old anthropic SDK versions as well as new ones.
+def _response_text(response) -> str:
+    """Join the text blocks of a Messages API response.
+
+    A reply can open with thinking blocks, so the first block is not guaranteed to
+    be text. An empty join (a refusal, or max_tokens spent entirely on thinking) is
+    a failure, never valid content, so it raises and the caller takes its fallback.
+    """
+    text = ''.join(
+        getattr(block, 'text', '') or ''
+        for block in (getattr(response, 'content', None) or [])
+        if getattr(block, 'type', None) == 'text'
+    )
+    if not text.strip():
+        raise ValueError(
+            'AI response carried no text '
+            f"(stop_reason={getattr(response, 'stop_reason', None)})"
+        )
+    return text
+
+
 class AIClient:
     """AI-powered decision maker for SurveyMonkey migration challenges"""
 
     def __init__(self, api_key: Optional[str] = None):
         """Initialize AI client with optional API key"""
         self.api_key = api_key or os.getenv('ANTHROPIC_API_KEY')
-        self.model = os.getenv('AI_MODEL', 'claude-opus-4-6')
-        self.temperature = float(os.getenv('AI_TEMPERATURE', '0'))
-        self.max_tokens = int(os.getenv('AI_MAX_TOKENS', '500'))
+        self.model = os.getenv('AI_MODEL', 'claude-opus-5-5')
+        self.max_tokens = int(os.getenv('AI_MAX_TOKENS', '16000'))
         self.client = None
         self.enabled = False
 
@@ -54,7 +76,7 @@ class AIClient:
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                temperature=self.temperature,
+                extra_body={'output_config': {'effort': 'medium'}},
                 messages=[{
                     "role": "user",
                     "content": f"{prompt}\n\nRespond with valid JSON only."
@@ -62,7 +84,7 @@ class AIClient:
             )
 
             # Parse response
-            content = response.content[0].text
+            content = _response_text(response)
             # Extract JSON from response
             if '```json' in content:
                 content = content.split('```json')[1].split('```')[0]
