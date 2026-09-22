@@ -15,7 +15,11 @@ bare model-ID swap:
 
 Each client swallows every exception and falls back to a deterministic answer, so
 none of those failures would ever be visible: the migration would quietly stop
-using AI. These tests drive every call site through a fake client and assert on
+using AI.
+
+Effort is sent only to models that accept it. Haiku returns a 400 for effort, so
+an AI_MODEL override to a Haiku model must get no effort rather than a fallback
+on every call. These tests drive every call site through a fake client and assert on
 what goes on the wire and on what comes back, so a regression turns a test red
 instead of silently turning the AI path off.
 
@@ -32,6 +36,8 @@ import shutil
 import sys
 import types
 
+import re
+
 import pytest
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -40,6 +46,21 @@ MODEL = 'claude-opus-5-5'
 MAX_TOKENS = 16000
 EFFORT_BODY = {'output_config': {'effort': 'medium'}}
 SAMPLING_PARAMS = ('temperature', 'top_p', 'top_k')
+
+# Model IDs are checked against what the API says about effort: accepted by Opus 4.5
+# and later, Sonnet 4.6 and later, and Fable; a 400 on Haiku 4.5 and older models.
+TAKES_EFFORT = [
+    'claude-opus-5-5', 'claude-opus-5', 'claude-opus-4-8', 'claude-opus-4-6',
+    'claude-opus-4-5', 'claude-opus-4-5-20251101', 'claude-sonnet-5',
+    'claude-sonnet-4-6', 'claude-fable-5', 'claude-fable-5-1',
+]
+REJECTS_EFFORT = [
+    'claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-3-haiku-20240307',
+    'claude-3-opus-20240229', 'claude-opus-4-1-20250805', 'claude-opus-4-20250514',
+    'claude-sonnet-4-5', 'claude-sonnet-4-5-20250929', 'claude-sonnet-4-20250514',
+    '', None,
+]
+HAIKU = 'claude-haiku-4-5'
 
 # Discovered, never listed, so a new vendor is covered the day it lands.
 AI_CLIENTS = sorted(glob.glob(os.path.join(REPO_ROOT, '*', 'src', 'api', 'ai_client.py')))
@@ -121,9 +142,11 @@ def _load_copy(vendor, tmp_path):
     return module
 
 
-def _client(module, monkeypatch, fake):
-    for var in ('ANTHROPIC_API_KEY', 'AI_MODEL', 'AI_MAX_TOKENS', 'AI_TEMPERATURE'):
+def _client(module, monkeypatch, fake, model=None):
+    for var in ('ANTHROPIC_API_KEY', 'AI_MODEL', 'AI_MAX_TOKENS'):
         monkeypatch.delenv(var, raising=False)
+    if model is not None:
+        monkeypatch.setenv('AI_MODEL', model)
     client = module.AIClient()
     assert client.enabled is False, 'no key is configured, so the client must start disabled'
     client.client = types.SimpleNamespace(messages=fake)
@@ -175,10 +198,21 @@ def test_every_messages_create_call_in_every_client_has_the_new_shape():
             for param in SAMPLING_PARAMS:
                 assert param not in keywords, f'{where} sends {param}'
             assert 'extra_body' in keywords, f'{where} does not send the effort'
-            assert ast.literal_eval(keywords['extra_body']) == EFFORT_BODY, where
+            body, model = keywords['extra_body'], keywords.get('model')
+            if isinstance(body, ast.Call):
+                # The effort helper must be asked about the model actually sent.
+                assert isinstance(body.func, ast.Name) and body.func.id == '_effort_body', where
+                assert model is not None and len(body.args) == 1, where
+                assert ast.dump(body.args[0]) == ast.dump(model), (
+                    f'{where} asks _effort_body about a different model than it sends'
+                )
+            else:
+                # A literal effort is only safe beside a literal model that takes it.
+                assert ast.literal_eval(body) == EFFORT_BODY, where
+                assert isinstance(model, ast.Constant) and model.value == MODEL, where
         for node in ast.walk(tree):
             if isinstance(node, ast.Constant) and isinstance(node.value, str) \
-                    and node.value.startswith('claude-'):
+                    and re.fullmatch(r'claude-[a-z0-9-]+', node.value):
                 assert node.value == MODEL, (
                     f'{os.path.relpath(path, REPO_ROOT)}:{node.lineno} names {node.value!r}'
                 )
@@ -202,6 +236,34 @@ def test_response_text_reads_text_blocks_and_refuses_an_empty_answer(vendor, tmp
     ):
         with pytest.raises(ValueError):
             read(types.SimpleNamespace(content=content, stop_reason=stop_reason))
+
+
+@pytest.mark.parametrize('vendor', [v for v in VENDORS if v != 'bpmn'])
+def test_effort_is_sent_only_to_models_that_accept_it(vendor, tmp_path):
+    module = _load_copy(vendor, tmp_path)
+    for model in TAKES_EFFORT:
+        assert module._effort_body(model) == EFFORT_BODY, f'{vendor}: {model} takes effort'
+    for model in REJECTS_EFFORT:
+        assert module._effort_body(model) is None, f'{vendor}: {model} 400s on effort'
+
+
+@pytest.mark.parametrize('vendor', [v for v in VENDORS if v != 'bpmn'])
+def test_a_haiku_override_sends_no_effort_and_still_parses(vendor, tmp_path, monkeypatch):
+    module = _load_copy(vendor, tmp_path)
+    fake = _FakeMessages([_text(REPLY_JSON)])
+    client = _client(module, monkeypatch, fake, model=HAIKU)
+
+    result = client.make_decision('probe.txt', {})
+
+    assert len(fake.calls) == 1
+    kwargs = fake.calls[0]
+    assert kwargs.get('model') == HAIKU
+    assert kwargs.get('extra_body') is None, (
+        f'{vendor} sends {kwargs.get("extra_body")!r} to {HAIKU}, which returns a 400'
+    )
+    for param in SAMPLING_PARAMS:
+        assert param not in kwargs
+    assert result.get('decision') == 'probe', f'{vendor} did not use the reply: {result!r}'
 
 
 @pytest.mark.parametrize('vendor', [v for v in VENDORS if v != 'bpmn'])

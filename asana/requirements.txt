@@ -4,6 +4,9 @@
 requests>=2.31.0
 python-dotenv>=1.0.0
 
+# AI augmentation (src/api/ai_client.py)
+anthropic>=0.18.0
+
 # Asana SDK (optional but recommended)
 asana>=3.2.3
 

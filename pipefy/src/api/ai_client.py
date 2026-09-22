@@ -2,6 +2,7 @@
 
 import os
 import json
+import re
 import logging
 from typing import Dict, Any, Optional, List
 from pathlib import Path
@@ -16,9 +17,8 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-# These clients call claude-opus-5-5, which rejects sampling parameters and always thinks.
-# Effort goes through extra_body as {'output_config': {'effort': 'medium'}} so it
-# works on old anthropic SDK versions as well as new ones.
+# These clients default to claude-opus-5-5, which rejects sampling parameters and
+# always thinks.
 def _response_text(response) -> str:
     """Join the text blocks of a Messages API response.
 
@@ -37,6 +37,28 @@ def _response_text(response) -> str:
             f"(stop_reason={getattr(response, 'stop_reason', None)})"
         )
     return text
+
+
+# Effort (output_config.effort) is accepted by Opus 4.5 and later, Sonnet 4.6 and
+# later, and every Fable model. Haiku and older models return a 400 for it, so an
+# AI_MODEL override to one of those gets no effort instead of failing every call.
+_EFFORT_MODEL = re.compile(r'claude-(opus|sonnet|fable)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$')
+
+
+def _effort_body(model):
+    """Return extra_body carrying effort medium, or None if the model rejects effort.
+
+    It goes through extra_body so it works on old anthropic SDK versions as well as
+    new ones.
+    """
+    match = _EFFORT_MODEL.match(model or '')
+    if not match:
+        return None
+    family, major, minor = match.group(1), int(match.group(2)), int(match.group(3) or 0)
+    floor = {'opus': (4, 5), 'sonnet': (4, 6), 'fable': (0, 0)}[family]
+    if (major, minor) < floor:
+        return None
+    return {'output_config': {'effort': 'medium'}}
 
 
 class AIClient:
@@ -87,7 +109,7 @@ class AIClient:
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
-                extra_body={'output_config': {'effort': 'medium'}},
+                extra_body=_effort_body(self.model),
                 messages=[{
                     "role": "user",
                     "content": f"{prompt}\n\nRespond with valid JSON only."

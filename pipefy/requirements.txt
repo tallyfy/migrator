@@ -5,6 +5,9 @@ requests>=2.31.0
 pyyaml>=6.0.1
 python-dotenv>=1.0.0
 
+# AI augmentation (src/api/ai_client.py)
+anthropic>=0.18.0
+
 # GraphQL client
 gql>=3.4.1
 graphql-core>=3.2.3
