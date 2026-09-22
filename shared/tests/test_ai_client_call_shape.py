@@ -364,6 +364,11 @@ def test_assistant_keeps_haiku_and_sends_no_sampling_parameter_or_effort(monkeyp
             assert param not in kwargs, f'migration_assistant sends {param}; Haiku 4.5 400s on effort'
     assert decision.strategy == 'transform' and decision.ai_reasoning == 'probe'
     assert optimization == json.loads(ASSISTANT_REPLY)
+    # A live optimization reply ran to about 3,200 output tokens. At the old 1500
+    # the JSON was cut off and the method returned its error result.
+    assert fake.calls[1].get('max_tokens') == 8000, (
+        f'suggest_process_optimization sends max_tokens={fake.calls[1].get("max_tokens")!r}'
+    )
 
 
 @pytest.mark.parametrize('content,stop_reason', [

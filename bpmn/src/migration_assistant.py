@@ -305,7 +305,7 @@ Respond with specific, actionable recommendations in JSON format."""
         try:
             response = self.client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=1500,
+                max_tokens=8000,
                 system="You are a process optimization expert specializing in BPMN to Tallyfy migration.",
                 messages=[{"role": "user", "content": prompt}]
             )
