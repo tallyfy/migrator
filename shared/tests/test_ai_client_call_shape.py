@@ -17,6 +17,10 @@ Each client swallows every exception and falls back to a deterministic answer, s
 none of those failures would ever be visible: the migration would quietly stop
 using AI.
 
+bpmn/src/migration_assistant.py is covered too. It stays on Haiku 4.5, but the
+same two defects applied: anthropic 1.x has no temperature argument and raises
+TypeError on one, and it read the first block as the answer.
+
 Effort is sent only to models that accept it. Haiku returns a 400 for effort, so
 an AI_MODEL override to a Haiku model must get no effort rather than a fallback
 on every call. These tests drive every call site through a fake client and assert on
@@ -31,6 +35,7 @@ the API confirmed that shape when this file was written.
 import ast
 import glob
 import importlib.util
+import json
 import os
 import shutil
 import sys
@@ -314,3 +319,101 @@ def test_a_reply_with_no_text_takes_the_fallback(vendor, tmp_path, monkeypatch):
     assert result.get('ai_powered') is False, (
         f'{vendor} treated an answer with no text as content: {result!r}'
     )
+
+
+# ---------------------------------------------------------------------------
+# bpmn/src/migration_assistant.py: two direct Haiku 4.5 calls outside ai_client.py.
+
+ASSISTANT = os.path.join(REPO_ROOT, 'bpmn', 'src', 'migration_assistant.py')
+ASSISTANT_MODEL = 'claude-haiku-4-5-20251001'
+ELEMENT = {'type': 'userTask', 'id': 't1', 'name': 'Review'}
+CONTEXT = {'previous': 'start', 'next': ['end']}
+ASSISTANT_REPLY = json.dumps({
+    'confidence': 0.8, 'strategy': 'transform', 'tallyfy_mapping': {},
+    'manual_steps': [], 'warnings': [], 'reasoning': 'probe',
+})
+
+
+def _assistant(monkeypatch, fake):
+    _stub_anthropic_if_absent()
+    name = '_ai_call_shape_bpmn_assistant'
+    spec = importlib.util.spec_from_file_location(name, ASSISTANT)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module  # dataclasses look the module up by name
+    spec.loader.exec_module(module)
+    monkeypatch.delenv('ANTHROPIC_API_KEY', raising=False)
+    assistant = module.ClaudeAIMigrationAssistant()
+    assert assistant.client is None, 'no key is configured, so there must be no client'
+    assistant.client = types.SimpleNamespace(messages=fake)
+    return assistant
+
+
+def test_assistant_keeps_haiku_and_sends_no_sampling_parameter_or_effort(monkeypatch):
+    fake = _FakeMessages([_thinking(), _text(ASSISTANT_REPLY)])
+    assistant = _assistant(monkeypatch, fake)
+
+    decision = assistant._ai_analyze_element(ELEMENT, CONTEXT)
+    optimization = assistant.suggest_process_optimization({'task_count': 3})
+
+    assert len(fake.calls) == 2
+    for kwargs in fake.calls:
+        assert kwargs.get('model') == ASSISTANT_MODEL
+        for param in SAMPLING_PARAMS:
+            assert param not in kwargs, f'migration_assistant sends {param}'
+        for param in ('extra_body', 'output_config', 'thinking'):
+            assert param not in kwargs, f'migration_assistant sends {param}; Haiku 4.5 400s on effort'
+    assert decision.strategy == 'transform' and decision.ai_reasoning == 'probe'
+    assert optimization == json.loads(ASSISTANT_REPLY)
+
+
+@pytest.mark.parametrize('content,stop_reason', [
+    ([_thinking()], 'max_tokens'),
+    ([_text('  ')], 'end_turn'),
+    ([], 'refusal'),
+])
+def test_assistant_reply_with_no_text_takes_the_fallback(monkeypatch, content, stop_reason):
+    fake = _FakeMessages(content, stop_reason=stop_reason)
+    assistant = _assistant(monkeypatch, fake)
+
+    decision = assistant._ai_analyze_element(ELEMENT, CONTEXT)
+    optimization = assistant.suggest_process_optimization({'task_count': 3})
+
+    assert len(fake.calls) == 2
+    assert decision == assistant._fallback_analyze_element(ELEMENT, CONTEXT)
+    assert 'error' in optimization, f'an answer with no text was treated as content: {optimization!r}'
+    assert optimization.get('recommendations') == 'Manual optimization recommended'
+
+
+def _python_sources():
+    skip = {'.git', 'tests', '__pycache__', 'venv', '.venv', 'node_modules'}
+    for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
+        dirnames[:] = [d for d in dirnames if d not in skip]
+        for filename in filenames:
+            if filename.endswith('.py'):
+                yield os.path.join(dirpath, filename)
+
+
+def test_no_claude_call_in_the_repo_sends_sampling_or_reads_the_first_block():
+    """Repo-wide, so a Claude call outside ai_client.py cannot keep the old shape."""
+    files_with_calls = 0
+    for path in _python_sources():
+        with open(path) as handle:
+            source = handle.read()
+        if 'messages.create' not in source:
+            continue
+        files_with_calls += 1
+        where = os.path.relpath(path, REPO_ROOT)
+        for node in ast.walk(ast.parse(source)):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == 'create'
+                    and isinstance(node.func.value, ast.Attribute)
+                    and node.func.value.attr == 'messages'):
+                sent = {kw.arg for kw in node.keywords}
+                for param in SAMPLING_PARAMS:
+                    assert param not in sent, f'{where}:{node.lineno} sends {param}'
+            if (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Attribute)
+                    and node.value.attr == 'content'
+                    and isinstance(node.slice, ast.Constant) and node.slice.value == 0):
+                raise AssertionError(f'{where}:{node.lineno} reads the first content block')
+    # 17 ai_client.py files plus bpmn/src/migration_assistant.py.
+    assert files_with_calls >= 18, f'found only {files_with_calls} files calling messages.create'
