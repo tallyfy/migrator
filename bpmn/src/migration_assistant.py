@@ -5,6 +5,7 @@ AI-powered migration tool using Claude API for intelligent transformation decisi
 """
 
 import os
+import re
 import sys
 import json
 import logging
@@ -45,6 +46,70 @@ def _response_text(response) -> str:
             f"(stop_reason={getattr(response, 'stop_reason', None)})"
         )
     return text
+
+
+_FENCED_BLOCK = re.compile(r'```(?:json)?[ \t]*\n(.*?)\n[ \t]*```', re.DOTALL)
+
+
+def _extract_json_object(text: str) -> Dict[str, Any]:
+    """Return the first JSON object in a reply, or raise ValueError.
+
+    A fenced block is read first, then the whole text. Within each, the first
+    '{' that starts a valid object wins. Slicing from the first '{' to the last
+    '}' instead breaks as soon as the prose after the JSON contains a brace.
+    """
+    candidates = [match.group(1) for match in _FENCED_BLOCK.finditer(text)]
+    candidates.append(text)
+    decoder = json.JSONDecoder()
+    for candidate in candidates:
+        start = candidate.find('{')
+        while start != -1:
+            try:
+                value, _ = decoder.raw_decode(candidate, start)
+            except json.JSONDecodeError:
+                value = None
+            if isinstance(value, dict):
+                return value
+            start = candidate.find('{', start + 1)
+    raise ValueError('AI response carried no JSON object')
+
+
+# The optimization call asks for structured output against this schema, so the
+# reply is a JSON object with exactly these four keys. One key per ask in the
+# prompt; the no-AI result carries the same keys, so callers see one shape.
+_OPTIMIZATION_KEYS = (
+    'optimizations',
+    'complexity_reduction',
+    'unsupported_pattern_alternatives',
+    'tallyfy_best_practices',
+)
+_OPTIMIZATION_SCHEMA = {
+    'type': 'object',
+    'properties': {key: {'type': 'array', 'items': {'type': 'string'}}
+                   for key in _OPTIMIZATION_KEYS},
+    'required': list(_OPTIMIZATION_KEYS),
+    'additionalProperties': False,
+}
+# Sent through extra_body, like the effort in ai_client.py, so it works on every
+# anthropic SDK version the requirements pin allows. Haiku 4.5 supports
+# output_config.format; it still takes no effort.
+_OPTIMIZATION_FORMAT = {
+    'output_config': {'format': {'type': 'json_schema', 'schema': _OPTIMIZATION_SCHEMA}}
+}
+
+
+def _validate_optimization(data: Any) -> Dict[str, List[str]]:
+    """Return the four optimization lists, or raise ValueError if any is wrong."""
+    if not isinstance(data, dict):
+        raise ValueError('optimization reply is not a JSON object')
+    missing = [key for key in _OPTIMIZATION_KEYS if key not in data]
+    if missing:
+        raise ValueError(f'optimization reply is missing {missing}')
+    for key in _OPTIMIZATION_KEYS:
+        value = data[key]
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise ValueError(f'optimization reply key {key!r} is not a list of strings')
+    return {key: data[key] for key in _OPTIMIZATION_KEYS}
 
 
 @dataclass
@@ -183,14 +248,8 @@ Determine the best migration strategy and provide specific Tallyfy mapping."""
         """Parse AI response into MigrationDecision"""
         
         try:
-            # Extract JSON from response
-            import re
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group())
-            else:
-                data = json.loads(response_text)
-            
+            data = _extract_json_object(response_text)
+
             return MigrationDecision(
                 element_type=element.get('type'),
                 element_id=element.get('id'),
@@ -283,9 +342,10 @@ Determine the best migration strategy and provide specific Tallyfy mapping."""
             return {
                 'optimizations': ['AI not available - manual optimization recommended'],
                 'complexity_reduction': [],
+                'unsupported_pattern_alternatives': [],
                 'tallyfy_best_practices': []
             }
-        
+
         prompt = f"""Analyze this BPMN process and suggest optimizations for Tallyfy migration:
 
 Process Statistics:
@@ -295,36 +355,42 @@ Process Statistics:
 - Unsupported elements: {bpmn_data.get('unsupported_count', 0)}
 
 Suggest:
-1. How to simplify the process for Tallyfy
-2. Which elements to combine or remove
-3. Alternative approaches for unsupported patterns
-4. Tallyfy best practices to follow
+1. How to simplify the process for Tallyfy (optimizations)
+2. Which elements to combine or remove (complexity_reduction)
+3. Alternative approaches for unsupported patterns (unsupported_pattern_alternatives)
+4. Tallyfy best practices to follow (tallyfy_best_practices)
 
-Respond with specific, actionable recommendations in JSON format."""
-        
-        try:
-            response = self.client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=8000,
-                system="You are a process optimization expert specializing in BPMN to Tallyfy migration.",
-                messages=[{"role": "user", "content": prompt}]
-            )
-            
-            # Parse response
-            text = _response_text(response)
-            import re
-            json_match = re.search(r'\{.*\}', text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-            else:
-                return {'recommendations': text}
-                
-        except Exception as e:
-            logger.error(f"Optimization suggestion failed: {e}")
-            return {
-                'error': str(e),
-                'recommendations': 'Manual optimization recommended'
-            }
+Give specific, actionable recommendations, one short sentence per list item."""
+
+        # Structured output makes the reply schema-valid JSON. The retry covers a
+        # reply that still cannot be used, such as one cut off at max_tokens.
+        last_error = None
+        for attempt in (1, 2):
+            try:
+                response = self.client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=8000,
+                    system="You are a process optimization expert specializing in BPMN to Tallyfy migration.",
+                    messages=[{"role": "user", "content": prompt}],
+                    extra_body=_OPTIMIZATION_FORMAT,
+                )
+            except Exception as e:
+                logger.error(f"Optimization suggestion failed: {e}")
+                return {
+                    'error': str(e),
+                    'recommendations': 'Manual optimization recommended'
+                }
+            try:
+                return _validate_optimization(_extract_json_object(_response_text(response)))
+            except ValueError as e:
+                last_error = e
+                logger.warning(f"Optimization reply {attempt} of 2 was unusable: {e}")
+
+        logger.error(f"Optimization suggestion failed: {last_error}")
+        return {
+            'error': str(last_error),
+            'recommendations': 'Manual optimization recommended'
+        }
 
 
 class BPMNToTallyfyMigrationAssistant:
@@ -377,12 +443,17 @@ class BPMNToTallyfyMigrationAssistant:
             # Generate Tallyfy template
             self.migration_results['tallyfy_template'] = self._generate_tallyfy_template()
             
-            # Get AI optimization suggestions
+            # Get AI optimization suggestions. elements_analyzed is a count, not
+            # a list, so the element types come from the decisions.
             if self.ai_assistant.client:
+                decisions = (self.migration_results['successful_migrations']
+                             + self.migration_results['partial_migrations']
+                             + self.migration_results['failed_migrations'])
+                types_seen = [(d.element_type or '').lower() for d in decisions]
                 optimization = self.ai_assistant.suggest_process_optimization({
                     'task_count': len(self.migration_results['successful_migrations']),
-                    'gateway_count': sum(1 for e in self.migration_results['elements_analyzed'] 
-                                        if 'gateway' in str(e).lower()),
+                    'gateway_count': sum(1 for t in types_seen if 'gateway' in t),
+                    'event_count': sum(1 for t in types_seen if t.endswith('event')),
                     'unsupported_count': len(self.migration_results['failed_migrations'])
                 })
                 self.migration_results['optimization_suggestions'] = optimization
