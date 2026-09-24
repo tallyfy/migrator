@@ -32,6 +32,7 @@ So this test asserts the property, not the history: whatever the branches are
 keyed on, the value they produce must be a field type the API will accept.
 """
 
+import glob
 import importlib.util
 import os
 import sys
@@ -45,14 +46,27 @@ if REPO_ROOT not in sys.path:
 
 from shared.capture_shapes import CAPTURE_FIELD_TYPES
 
-# Every vendor carrying this AIClient. bpmn, pipefy, process-street and
-# surveymonkey have their own divergent copies and are covered by the same
-# property test where they define the method.
+# Every vendor, for the tree-wide scans further down. The tests of the AIClient
+# itself use AI_VENDORS below, because eleven vendors no longer ship one (#23).
 VENDORS = [
     'asana', 'basecamp', 'bpmn', 'clickup', 'cognito-forms', 'google-forms',
     'jotform', 'kissflow', 'monday', 'nextmatter', 'pipefy', 'process-street',
     'rocketlane', 'surveymonkey', 'trello', 'typeform', 'wrike',
 ]
+
+# The vendors that ship an ai_client.py, discovered rather than listed. bpmn,
+# pipefy, process-street and surveymonkey have their own divergent copies and
+# are covered by the same property test where they define the method.
+AI_VENDORS = sorted(
+    os.path.relpath(path, REPO_ROOT).split(os.sep)[0]
+    for path in glob.glob(os.path.join(REPO_ROOT, '*', 'src', 'api', 'ai_client.py'))
+)
+
+
+def test_ai_client_discovery_is_not_empty():
+    # A sweep that discovers nothing passes every assertion made about it.
+    assert len(AI_VENDORS) >= 6, f'found only {len(AI_VENDORS)} ai_client.py files'
+
 
 # Deliberately wide: every branch of the fallback, plus inputs that hit the
 # sample-values and default arms.
@@ -115,7 +129,7 @@ def _load_ai_client(vendor):
 
 class TestFallbackOnlyEmitsRealTallyfyFieldTypes:
 
-    @pytest.mark.parametrize('vendor', VENDORS)
+    @pytest.mark.parametrize('vendor', AI_VENDORS)
     def test_every_branch_returns_an_accepted_field_type(self, vendor):
         client_cls = _load_ai_client(vendor)
         if not hasattr(client_cls, '_fallback_field_mapping'):
@@ -132,7 +146,7 @@ class TestFallbackOnlyEmitsRealTallyfyFieldTypes:
                 f'422. Accepted: {sorted(CAPTURE_FIELD_TYPES)}'
             )
 
-    @pytest.mark.parametrize('vendor', VENDORS)
+    @pytest.mark.parametrize('vendor', AI_VENDORS)
     def test_a_text_field_is_not_swallowed_by_the_link_branch(self, vendor):
         """Regression: the link branch was keyed on "text" and shadowed this.
 
@@ -150,7 +164,7 @@ class TestFallbackOnlyEmitsRealTallyfyFieldTypes:
             f'{result["tallyfy_type"]!r} instead of text'
         )
 
-    @pytest.mark.parametrize('vendor', VENDORS)
+    @pytest.mark.parametrize('vendor', AI_VENDORS)
     def test_no_branch_is_shadowed_by_an_identical_earlier_condition(self, vendor):
         """An unreachable `elif` is dead logic that reads as live coverage."""
         import ast
@@ -184,7 +198,7 @@ class TestFallbackOnlyEmitsRealTallyfyFieldTypes:
                     len(current.orelse) == 1 and isinstance(current.orelse[0], ast.If)
                 ) else None
 
-    @pytest.mark.parametrize('vendor', VENDORS)
+    @pytest.mark.parametrize('vendor', AI_VENDORS)
     def test_membership_lists_carry_no_duplicate_entries(self, vendor):
         """`x not in ["text", "text", 'date']` lost a distinct third value."""
         import ast

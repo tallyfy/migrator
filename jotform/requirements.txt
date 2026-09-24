@@ -4,9 +4,6 @@
 requests>=2.31.0
 python-dotenv>=1.0.0
 
-# AI augmentation
-anthropic>=0.18.0
-
 # Progress tracking
 tqdm>=4.66.0
 

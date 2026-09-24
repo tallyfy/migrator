@@ -3,7 +3,7 @@ Contract test for how every vendor's AIClient calls Claude (issue #19).
 
 WHY THIS FILE EXISTS
 --------------------
-All seventeen `*/src/api/ai_client.py` files call `claude-opus-5-5`. That model
+Every `*/src/api/ai_client.py` file calls `claude-opus-5-5`. That model
 differs from the Opus 4.6 the clients were written for in three ways that break a
 bare model-ID swap:
 
@@ -182,7 +182,8 @@ def _assert_wire_shape(vendor, kwargs):
 
 def test_discovery_found_every_vendor():
     # A sweep that discovers nothing passes every assertion made about it.
-    assert len(AI_CLIENTS) >= 17, f'found only {len(AI_CLIENTS)} ai_client.py files'
+    # Six since eleven vendors removed an AI client nothing called (#23).
+    assert len(AI_CLIENTS) >= 6, f'found only {len(AI_CLIENTS)} ai_client.py files'
 
 
 def test_every_messages_create_call_in_every_client_has_the_new_shape():
@@ -221,8 +222,8 @@ def test_every_messages_create_call_in_every_client_has_the_new_shape():
                 assert node.value == MODEL, (
                     f'{os.path.relpath(path, REPO_ROOT)}:{node.lineno} names {node.value!r}'
                 )
-    # 16 clients with one call plus bpmn with five.
-    assert total >= 21, f'found only {total} messages.create calls'
+    # 5 clients with one call plus bpmn with five.
+    assert total >= 10, f'found only {total} messages.create calls'
 
 
 @pytest.mark.parametrize('vendor', VENDORS)
@@ -435,5 +436,5 @@ def test_no_claude_call_in_the_repo_sends_sampling_or_reads_the_first_block():
                     and node.value.attr == 'content'
                     and isinstance(node.slice, ast.Constant) and node.slice.value == 0):
                 raise AssertionError(f'{where}:{node.lineno} reads the first content block')
-    # 17 ai_client.py files plus bpmn/src/migration_assistant.py.
-    assert files_with_calls >= 18, f'found only {files_with_calls} files calling messages.create'
+    # 6 ai_client.py files plus bpmn/src/migration_assistant.py.
+    assert files_with_calls >= 7, f'found only {files_with_calls} files calling messages.create'

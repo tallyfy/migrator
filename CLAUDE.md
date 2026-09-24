@@ -348,6 +348,14 @@ Every migrator MUST include AI augmentation capabilities:
 - Keep prompts focused (<500 tokens) with JSON responses
 - ALWAYS provide deterministic fallbacks when AI unavailable
 
+**Not true of every migrator since 2026-09-24 (issue #23).** asana, basecamp, clickup,
+cognito-forms, google-forms, jotform, kissflow, monday, nextmatter, trello and wrike ship
+no AI client. Theirs were one file copied eleven times, and nothing in their migration
+code called it, so it was removed and each README says so with the evidence. An AI
+client counts only if the migration code reaches it and every template it loads exists
+and fills. `shared/tests/test_prompt_templates.py` checks the templates; reachability
+still needs a grep of the callers.
+
 ### 3. Documentation Standards
 Every migrator MUST have:
 - **README.md** with ALL 18 required sections (including AI features)

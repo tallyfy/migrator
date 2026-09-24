@@ -20,7 +20,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from api.trello_client import TrelloClient
 from api.tallyfy_client import TallyfyClient
-from api.ai_client import AIClient
 from transformers.field_transformer import FieldTransformer
 from transformers.template_transformer import TemplateTransformer
 from transformers.instance_transformer import InstanceTransformer
@@ -58,13 +57,6 @@ class TrelloMigrationOrchestrator:
     
     def _initialize_components(self):
         """Initialize all migration components"""
-        # Initialize AI client (optional)
-        self.ai_client = AIClient()
-        if self.ai_client.enabled:
-            logger.info("✅ AI augmentation enabled")
-        else:
-            logger.info("⚠️ AI disabled - using deterministic rules")
-        
         # Initialize API clients
         self.vendor_client = TrelloClient(
             api_key=os.getenv('TRELLO_API_KEY'),
@@ -76,11 +68,11 @@ class TrelloMigrationOrchestrator:
         )
         
         # Initialize transformers
-        self.field_transformer = FieldTransformer(self.ai_client)
-        self.template_transformer = TemplateTransformer(self.ai_client)
+        self.field_transformer = FieldTransformer()
+        self.template_transformer = TemplateTransformer()
         self.template_transformer.field_transformer = self.field_transformer
-        self.instance_transformer = InstanceTransformer(self.ai_client)
-        self.user_transformer = UserTransformer(self.ai_client)
+        self.instance_transformer = InstanceTransformer()
+        self.user_transformer = UserTransformer()
         
         # Initialize validator
         self.validator = MigrationValidator(

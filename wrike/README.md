@@ -51,7 +51,6 @@ Transform your Wrike enterprise work management platform with its custom item ty
 
 - **Wrike**: Generate permanent token from Apps & Integrations → API
 - **Tallyfy**: Admin access to create OAuth application at https://app.tallyfy.com/organization/settings/integrations
-- **Anthropic (Optional)**: API key for AI features from https://console.anthropic.com/
 
 ## 🔧 Installation
 
@@ -93,21 +92,9 @@ MIGRATE_ARCHIVED=false
 FORMULA_FIELD_HANDLING=calculate_once  # Options: calculate_once, manual_entry, skip
 ```
 
-### Optional AI Configuration (Strongly Recommended for Enterprise)
+### No AI configuration
 
-```env
-# Anthropic API for intelligent decisions
-ANTHROPIC_API_KEY=sk-ant-api03-...
-AI_MODEL=claude-opus-5-5
-AI_MAX_TOKENS=16000
-
-# AI Feature Flags
-AI_TRANSFORM_CUSTOM_TYPES=true
-AI_MAP_WORKFLOWS=true
-AI_CONVERT_FORMULAS=true
-AI_OPTIMIZE_REQUEST_FORMS=true
-AI_CONSOLIDATE_BLUEPRINTS=true
-```
+This migrator makes no AI calls and needs no Anthropic API key. See the AI Features section below.
 
 ## 🚦 Quick Start
 
@@ -118,7 +105,6 @@ AI_CONSOLIDATE_BLUEPRINTS=true
 This verifies:
 - API connectivity to both platforms
 - Account permissions and access levels
-- AI availability (if configured)
 - Enterprise feature usage analysis
 
 ### 2. Dry Run (Preview without changes)
@@ -139,55 +125,14 @@ Executes complete migration with progress tracking.
 ```
 Continues from last checkpoint if migration was interrupted.
 
-## 🤖 AI-Powered Features
+## 🤖 AI Features
 
-This migrator includes sophisticated AI augmentation for handling Wrike's enterprise complexity:
+This migrator makes no AI calls and needs no Anthropic API key. Its AI client was removed in issue #23 because nothing in the migration could reach it:
 
-### When AI Assists
+- `src/main.py` built the client and passed it to the four transformers, which stored it and never called a method on it. No file called `make_decision`, `batch_decisions` or `analyze_patterns`.
+- The client loaded its prompts from `src/prompts/`, and this migrator never shipped that folder, so even a direct call fell back to fixed rules.
 
-1. **Custom Item Type Transformation**: Converts business-specific items to workflows
-   - Analyzes item type usage patterns (Bug, Campaign, Candidate, etc.)
-   - Creates specialized blueprints with appropriate fields
-   - Maps type-specific workflows to Tallyfy rules
-   - Preserves business logic and approval chains
-
-2. **Blueprint & Request Form Integration**: Intelligently combines intake and execution
-   - Merges request forms with blueprints into unified workflows
-   - Converts branching logic to conditional steps
-   - Optimizes field collection points
-   - Maintains approval workflows
-
-3. **Formula Field Conversion**: Handles calculated fields intelligently
-   - Evaluates formula complexity
-   - Converts simple formulas to Tallyfy logic
-   - Creates manual calculation instructions for complex formulas
-   - Preserves rollup calculations as summaries
-
-4. **Workflow Sophistication Mapping**: Transforms complex workflows
-   - Maps custom statuses to Tallyfy states
-   - Converts approval chains to approval steps
-   - Handles parallel approvals with conditions
-   - Preserves workflow automation rules
-
-5. **Space Organization Strategy**: Optimizes enterprise structure
-   - Analyzes space usage patterns
-   - Suggests consolidation opportunities
-   - Maps permissions appropriately
-   - Maintains departmental boundaries
-
-### AI Decision Transparency
-- All decisions logged with confidence scores (0.0-1.0)
-- Custom type transformations explained
-- Formula conversion strategies documented
-- Low confidence mappings (<0.7) flagged for review
-- Edit prompts in `src/prompts/` to customize behavior
-
-### Running Without AI
-The migrator works without AI using conservative strategies:
-- Custom item types → Standard blueprints with metadata
-- Formula fields → Manual entry with instructions
-- Complex workflows → Simplified linear flows
-- Request forms → Basic kick-off forms
+Every decision is made by the migrator's own rules. Where this README elsewhere says the migrator uses AI, for example an "AI Strategy" line, that describes a design that was never connected to the migration code.
 
 ## 📊 Migration Phases
 
@@ -392,7 +337,6 @@ See [OBJECT_MAPPING.md](OBJECT_MAPPING.md) for complete field-level mappings.
 #### Custom Item Type Complexity
 **Error**: `Cannot map custom item type: too complex`
 **Solution**:
-- Enable AI mapping with Anthropic API key
 - Use --simplify-types flag
 - Manually map complex types post-migration
 
@@ -432,7 +376,6 @@ export LOG_LEVEL=DEBUG
 - `formula_conversions.csv` - Formula field handling decisions
 - `permission_matrix.csv` - User permission mappings
 - `errors.log` - Detailed error information
-- `ai_decisions.json` - All AI-powered decisions
 - `manual_review.md` - Items requiring attention
 
 ### Report Contents

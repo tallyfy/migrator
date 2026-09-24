@@ -51,7 +51,6 @@ Transform your Google Forms into Tallyfy workflows with this fully-implemented p
 - **Google Forms**: OAuth2 authentication with Google account
 - **Google Sheets**: For response data access
 - **Tallyfy**: Admin access to create OAuth application
-- **Anthropic (Required)**: API key for form analysis from https://console.anthropic.com/
 
 ## 🔧 Installation
 
@@ -94,19 +93,9 @@ SECTION_TO_STEP=true  # Convert sections to workflow steps
 QUIZ_HANDLING=process_with_notes  # Options: process_with_notes, ignore_scoring
 ```
 
-### Required AI Configuration
+### No AI configuration
 
-```env
-# Anthropic API for form analysis (REQUIRED)
-ANTHROPIC_API_KEY=sk-ant-api03-...
-AI_MODEL=claude-opus-5-5
-AI_MAX_TOKENS=16000
-
-# AI Features
-AI_ANALYZE_SIMPLICITY=true  # Assess if form needs splitting
-AI_GROUP_QUESTIONS=true  # Group related questions
-AI_OPTIMIZE_SECTIONS=true  # Convert sections intelligently
-```
+This migrator makes no AI calls and needs no Anthropic API key. See the AI Features section below.
 
 ## 🚦 Quick Start
 
@@ -134,32 +123,14 @@ Preview transformation without changes.
 ```
 Execute complete migration.
 
-## 🤖 AI-Powered Features
+## 🤖 AI Features
 
-### Critical AI Decisions
+This migrator makes no AI calls and needs no Anthropic API key. Its AI client was removed in issue #23 because nothing in the migration could reach it:
 
-1. **Form Simplicity Assessment**: Google Forms tend to be simpler
-   - **≤20 questions, no sections** → Single kick-off form
-   - **>20 questions or has sections** → Multi-step workflow
-   - **Quiz with sections** → Steps with validation
-   - **Page breaks present** → Natural step boundaries
+- `src/main.py` built the client and passed it to the four transformers. The only call on it, `map_field` in `src/transformers/field_transformer.py`, named a method the client never defined, and that branch could not run: nothing calls `FieldTransformer.transform`, and the template transformer calls a `transform_field` method that does not exist.
+- The client loaded its prompts from `src/prompts/`, and this migrator never shipped that folder, so even a direct call fell back to fixed rules.
 
-2. **Section Transformation**: Converts sections to steps
-   - Analyzes section titles and content
-   - Groups related questions
-   - Creates logical workflow progression
-   - Maintains section order
-
-3. **Response Validation Mapping**: Preserves data quality
-   - Regex patterns → Field validation
-   - Required fields → Mandatory field
-   - Custom messages → Help text
-   - Quiz answers → Process notes
-
-4. **Branching Logic Simplification**: Basic logic support
-   - Section navigation → Step conditions
-   - Submit actions → Process completion
-   - Limited to single conditions
+Every decision is made by the migrator's own rules. Where this README elsewhere says the migrator uses AI, for example an "AI Strategy" line, that describes a design that was never connected to the migration code.
 
 ## 📊 Field Type Mapping
 
@@ -362,7 +333,6 @@ Execute complete migration.
 - `validation_rules.json` - Rule mappings
 - `section_transformations.csv` - Step creation
 - `unsupported_features.md` - Manual setup
-- `ai_decisions.json` - AI reasoning
 
 ## 🔒 Security
 

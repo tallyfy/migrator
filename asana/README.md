@@ -376,6 +376,15 @@ See [OBJECT_MAPPING.md](OBJECT_MAPPING.md) for detailed field mappings.
 | Teams | Groups | User collections |
 | Assignee | Member Assignment | User task assignment |
 
+## 🤖 AI Features
+
+This migrator makes no AI calls and needs no Anthropic API key. Its AI client was removed in issue #23 because nothing in the migration could reach it:
+
+- `src/api/ai_client.py` was never imported. No other file in this migrator named it, so nothing could call it.
+- The client loaded its prompts from `src/prompts/`, and this migrator never shipped that folder, so even a direct call fell back to fixed rules.
+
+Every decision is made by the migrator's own rules. Where this README elsewhere says the migrator uses AI, for example an "AI Strategy" line, that describes a design that was never connected to the migration code.
+
 ## ⚠️ Known Limitations
 
 ### Features Requiring Manual Recreation

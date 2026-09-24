@@ -89,14 +89,6 @@ class FieldTransformer(FormMigratorBase):
         elif 'gridQuestion' in question:
             return 'table'
         else:
-            # Use AI for unknown types if available
-            if self.ai_client and self.ai_client.enabled:
-                result = self.ai_client.map_field({
-                    'question_type': list(question.keys())[0] if question else 'unknown',
-                    'vendor': 'google_forms'
-                })
-                if result and result.get('confidence', 0) > 0.7:
-                    return result.get('tallyfy_type', 'text')
             return 'text'
     
     def _transform_choice_options(self, choice_question: Dict[str, Any]) -> List[Dict[str, str]]:

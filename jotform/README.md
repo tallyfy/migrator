@@ -51,7 +51,6 @@ Transform your Jotform forms with their extensive widget library, complex condit
 
 - **Jotform**: API key from My Account → API section
 - **Tallyfy**: Admin access to create OAuth application at https://app.tallyfy.com/organization/settings/integrations
-- **Anthropic (Required)**: API key for form analysis from https://console.anthropic.com/
 
 ## 🔧 Installation
 
@@ -93,20 +92,9 @@ PRESERVE_CONDITIONS=true
 CALCULATION_HANDLING=process_data  # Options: process_data, one_time, skip
 ```
 
-### Required AI Configuration (Essential for Form Analysis)
+### No AI configuration
 
-```env
-# Anthropic API for intelligent form analysis
-ANTHROPIC_API_KEY=sk-ant-api03-...  # REQUIRED for form splitting
-AI_MODEL=claude-opus-5-5
-AI_MAX_TOKENS=16000
-
-# AI Feature Flags
-AI_ANALYZE_COMPLEXITY=true  # Analyze form structure
-AI_SPLIT_INTELLIGENTLY=true  # Smart form splitting
-AI_MAP_WIDGETS=true  # Widget to field mapping
-AI_TRANSFORM_CONDITIONS=true  # Condition to rule conversion
-```
+This migrator makes no AI calls and needs no Anthropic API key. See the AI Features section below.
 
 ## 🚦 Quick Start
 
@@ -134,34 +122,16 @@ Executes complete migration with progress tracking.
 ```
 Continues from last checkpoint.
 
-## 🤖 AI-Powered Features
+## 🤖 AI Features
 
-### Critical AI Decisions for Form Transformation
+This migrator makes no AI calls and needs no Anthropic API key. Its AI client was removed in issue #23 because nothing in the migration could reach it:
 
-1. **Form Complexity Analysis**: Determines optimal structure
-   - **≤20 fields, no conditions** → Single kick-off form
-   - **21-50 fields, simple conditions** → 2-4 step workflow
-   - **>50 fields or complex logic** → 5+ step workflow
-   - **Page breaks present** → Steps align with pages
-   - **Collapsed sections** → Become workflow steps
+- `src/main.py` built the client and passed it to the four transformers, which stored it and never called a method on it. No file called `make_decision`, `batch_decisions` or `analyze_patterns`.
+- The client loaded its prompts from `src/prompts/`, and this migrator never shipped that folder, so even a direct call fell back to fixed rules.
 
-2. **Widget Transformation Strategy**: Maps 500+ widgets
-   - Analyzes widget functionality
-   - Maps to closest Tallyfy equivalent
-   - Preserves data where possible
-   - Documents unsupported features
+Every decision is made by the migrator's own rules. Where this README elsewhere says the migrator uses AI, for example an "AI Strategy" line, that describes a design that was never connected to the migration code.
 
-3. **Field Grouping Intelligence**: Creates logical steps
-   - Groups related fields (contact, preferences, etc.)
-   - Respects page breaks as natural boundaries
-   - Considers conditional logic flow
-   - Optimizes for user experience
-
-4. **Condition Transformation**: Converts complex logic
-   - Show/hide conditions → Step visibility rules
-   - Calculate conditions → Process calculations
-   - Skip logic → Branching rules
-   - Email routing → Assignment rules
+## 🔧 Form Transformation Details
 
 ### Form Complexity Assessment Implementation
 
@@ -691,7 +661,6 @@ The migrator uses AI to determine the best mapping for Jotform's 500+ widgets:
 - `field_mappings.csv` - Field type conversions
 - `condition_transformations.json` - Logic mappings
 - `unsupported_features.md` - Manual setup needed
-- `ai_decisions.json` - AI reasoning
 
 ## 🔒 Security
 

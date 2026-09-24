@@ -51,7 +51,6 @@ Transform your Trello Kanban boards with their visual card-based workflows into 
 
 - **Trello**: API Key and Token from https://trello.com/app-key
 - **Tallyfy**: Admin access to create OAuth application at https://app.tallyfy.com/organization/settings/integrations
-- **Anthropic (Optional)**: API key for AI features from https://console.anthropic.com/
 
 ## 🔧 Installation
 
@@ -93,21 +92,9 @@ ARCHIVE_MIGRATION=false
 POWERUP_DATA_HANDLING=preserve_metadata  # Options: preserve_metadata, ignore, document
 ```
 
-### Optional AI Configuration (Essential for Kanban Transformation)
+### No AI configuration
 
-```env
-# Anthropic API for intelligent decisions
-ANTHROPIC_API_KEY=sk-ant-api03-...
-AI_MODEL=claude-opus-5-5
-AI_MAX_TOKENS=16000
-
-# AI Feature Flags
-AI_SEQUENCE_LISTS=true
-AI_TRANSFORM_KANBAN=true
-AI_MAP_BUTLER_RULES=true
-AI_OPTIMIZE_CHECKLISTS=true
-AI_CATEGORIZE_CARDS=true
-```
+This migrator makes no AI calls and needs no Anthropic API key. See the AI Features section below.
 
 ## 🚦 Quick Start
 
@@ -118,7 +105,6 @@ AI_CATEGORIZE_CARDS=true
 This verifies:
 - API connectivity to both platforms
 - Board access permissions
-- AI availability (if configured)
 - Kanban complexity analysis
 
 ### 2. Dry Run (Preview without changes)
@@ -139,57 +125,14 @@ Executes complete migration with progress tracking.
 ```
 Continues from last checkpoint if migration was interrupted.
 
-## 🤖 AI-Powered Features
+## 🤖 AI Features
 
-This migrator includes advanced AI to handle the fundamental Kanban to Sequential paradigm shift:
+This migrator makes no AI calls and needs no Anthropic API key. Its AI client was removed in issue #23 because nothing in the migration could reach it:
 
-### When AI Assists
+- `src/main.py` built the client and passed it to the four transformers, which stored it and never called a method on it. No file called `make_decision`, `batch_decisions` or `analyze_patterns`.
+- The client loaded its prompts from `src/prompts/`, and this migrator never shipped that folder, so even a direct call fell back to fixed rules.
 
-1. **Kanban to Sequential Transformation**: The core paradigm shift
-   - Analyzes card flow patterns across lists
-   - Determines optimal sequential ordering
-   - Creates entry/work/exit steps for each list
-   - Handles parallel work through conditional branching
-
-2. **List Sequencing Optimization**: Creates logical workflow from visual boards
-   - Analyzes list names and positions
-   - Identifies process stages vs. status columns
-   - Maps backlog/done lists appropriately
-   - Creates optimal step sequence
-
-3. **Card Categorization**: Determines if cards are tasks or processes
-   - Analyzes card complexity (checklists, attachments, activity)
-   - Simple cards → Tasks within processes
-   - Complex cards → Separate processes
-   - Recurring cards → Blueprint templates
-
-4. **Butler Automation Translation**: Converts visual automation to workflow rules
-   - Maps trigger conditions to Tallyfy events
-   - Simplifies complex Butler rules
-   - Preserves essential automation logic
-   - Documents untranslatable automations
-
-5. **Checklist Intelligence**: Optimizes checklist transformation
-   - Simple checklists → Task subtasks
-   - Complex checklists → Form fields
-   - Conditional items → Workflow branches
-   - Progress tracking → Completion rules
-
-### AI Decision Transparency
-- All Kanban transformations logged with reasoning
-- List sequencing logic explained
-- Card categorization confidence scores (0.0-1.0)
-- Butler rule simplification documented
-- Low confidence items (<0.7) flagged for review
-- Edit prompts in `src/prompts/` to customize behavior
-
-### Running Without AI
-The migrator works without AI using standard patterns:
-- Each list becomes 3 steps (Entry, Work, Exit)
-- Left-to-right list order preserved
-- All cards become tasks
-- Butler rules require manual configuration
-- Checklists become simple subtasks
+Every decision is made by the migrator's own rules. Where this README elsewhere says the migrator uses AI, for example an "AI Strategy" line, that describes a design that was never connected to the migration code.
 
 ## 📊 Migration Phases
 
@@ -694,7 +637,6 @@ See [OBJECT_MAPPING.md](OBJECT_MAPPING.md) for complete mappings.
 #### Kanban Transformation Failed
 **Error**: `Cannot determine list sequence`
 **Solution**:
-- Enable AI with Anthropic key
 - Specify custom list order
 - Use three_step transformation
 
@@ -734,7 +676,6 @@ export LOG_LEVEL=DEBUG
 - `card_categorization.csv` - Card classification decisions
 - `butler_translations.json` - Automation rule mappings
 - `errors.log` - Detailed error information
-- `ai_decisions.json` - AI transformation reasoning
 - `manual_review.md` - Items requiring attention
 
 ### Report Contents
