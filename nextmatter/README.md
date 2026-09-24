@@ -51,7 +51,6 @@ Transform your NextMatter operational excellence processes and compliance-focuse
 
 - **NextMatter**: Generate API key from Company > Next Matter API keys (Admin only)
 - **Tallyfy**: Admin access to create OAuth application at https://app.tallyfy.com/organization/settings/integrations
-- **Anthropic (Optional)**: API key for AI features from https://console.anthropic.com/
 
 ## 🔧 Installation
 
@@ -93,21 +92,9 @@ COMPLIANCE_MODE=strict  # Options: strict, balanced, relaxed
 APPROVAL_CHAIN_STRATEGY=preserve  # Options: preserve, simplify, flatten
 ```
 
-### Optional AI Configuration (Highly Recommended for Compliance)
+### No AI configuration
 
-```env
-# Anthropic API for intelligent decisions
-ANTHROPIC_API_KEY=sk-ant-api03-...
-AI_MODEL=claude-opus-5-5
-AI_MAX_TOKENS=16000
-
-# AI Feature Flags
-AI_ANALYZE_COMPLIANCE=true
-AI_MAP_CONDITIONAL_LOGIC=true
-AI_OPTIMIZE_APPROVALS=true
-AI_TRANSFORM_SERVICE_FLOWS=true
-AI_HANDLE_EXTERNAL_PARTICIPANTS=true
-```
+This migrator makes no AI calls and needs no Anthropic API key. See the AI Features section below.
 
 ## 🚦 Quick Start
 
@@ -118,7 +105,6 @@ AI_HANDLE_EXTERNAL_PARTICIPANTS=true
 This verifies:
 - API connectivity to both platforms
 - API key permissions
-- AI availability (if configured)
 - Process complexity analysis
 
 ### 2. Dry Run (Preview without changes)
@@ -139,55 +125,14 @@ Executes complete migration with progress tracking.
 ```
 Continues from last checkpoint if migration was interrupted.
 
-## 🤖 AI-Powered Features
+## 🤖 AI Features
 
-This migrator includes sophisticated AI augmentation for handling NextMatter's operational excellence focus:
+This migrator makes no AI calls and needs no Anthropic API key. Its AI client was removed in issue #23 because nothing in the migration could reach it:
 
-### When AI Assists
+- `src/main.py` built the client and passed it to the four transformers, which stored it and never called a method on it. No file called `make_decision`, `batch_decisions` or `analyze_patterns`.
+- The client loaded its prompts from `src/prompts/`, and this migrator never shipped that folder, so even a direct call fell back to fixed rules.
 
-1. **Compliance Workflow Transformation**: Preserves audit and compliance requirements
-   - Analyzes compliance checkpoints in workflows
-   - Maps audit trails to Tallyfy's tracking
-   - Ensures regulatory requirements are maintained
-   - Creates compliance reports for validation
-
-2. **Service Process Optimization**: Transforms service team workflows
-   - Identifies customer touchpoints
-   - Optimizes handoffs between teams
-   - Maps SLA requirements to deadlines
-   - Preserves quality checkpoints
-
-3. **Conditional Logic & Routing**: Intelligently maps complex branching
-   - Analyzes radio button conditions
-   - Maps routing sections to conditional steps
-   - Preserves skip logic and parallel paths
-   - Optimizes decision trees
-
-4. **Multi-Level Approval Mapping**: Handles complex approval chains
-   - Maps role-based approvals
-   - Preserves escalation rules
-   - Handles parallel approvals
-   - Maintains approval delegation logic
-
-5. **External Participant Integration**: Manages customer/vendor interactions
-   - Determines optimal guest access strategy
-   - Maps external forms to kick-off forms
-   - Preserves communication touchpoints
-   - Maintains data privacy boundaries
-
-### AI Decision Transparency
-- All decisions logged with confidence scores (0.0-1.0)
-- Compliance impact assessments documented
-- Conditional logic mappings explained
-- Low confidence items (<0.7) flagged for manual review
-- Edit prompts in `src/prompts/` to customize behavior
-
-### Running Without AI
-The migrator works without AI using conservative strategies:
-- Compliance requirements → Strict approval steps
-- Conditional logic → Linear workflow with notes
-- External participants → Guest form submissions
-- Service processes → Standard workflows
+Every decision is made by the migrator's own rules. Where this README elsewhere says the migrator uses AI, for example an "AI Strategy" line, that describes a design that was never connected to the migration code.
 
 ## 📊 Migration Phases
 
@@ -400,7 +345,6 @@ See [OBJECT_MAPPING.md](OBJECT_MAPPING.md) for complete field-level mappings.
 #### Conditional Logic Too Complex
 **Error**: `Cannot map routing logic`
 **Solution**:
-- Enable AI with Anthropic API key
 - Simplify to linear flow with notes
 - Document complex logic for manual setup
 
@@ -433,7 +377,6 @@ export LOG_LEVEL=DEBUG
 - `approval_chains.csv` - Approval hierarchy mappings
 - `external_participants.csv` - Guest access decisions
 - `errors.log` - Detailed error information
-- `ai_decisions.json` - AI-powered transformation decisions
 - `manual_review.md` - Items requiring human validation
 
 ### Report Contents

@@ -52,7 +52,6 @@ Transform your Cognito Forms with their powerful calculations, repeating section
 
 - **Cognito Forms**: API key from Settings → Integrations
 - **Tallyfy**: Admin access to create OAuth application
-- **Anthropic (Required)**: API key for complex form analysis
 
 ## 🔧 Installation
 
@@ -94,20 +93,9 @@ CALCULATION_HANDLING=one_time  # Options: one_time, document, skip
 MIGRATE_ENTRIES=true
 ```
 
-### Required AI Configuration
+### No AI configuration
 
-```env
-# Anthropic API (REQUIRED for complex forms)
-ANTHROPIC_API_KEY=sk-ant-api03-...
-AI_MODEL=claude-opus-5-5
-AI_MAX_TOKENS=16000
-
-# AI Features
-AI_ANALYZE_CALCULATIONS=true  # Analyze calculation complexity
-AI_TRANSFORM_REPEATING=true  # Handle repeating sections
-AI_MAP_CONDITIONS=true  # Convert conditional logic
-AI_OPTIMIZE_WORKFLOW=true  # Create optimal structure
-```
+This migrator makes no AI calls and needs no Anthropic API key. See the AI Features section below.
 
 ## 🚦 Quick Start
 
@@ -135,33 +123,14 @@ Execute complete migration.
 ```
 Continue from last checkpoint.
 
-## 🤖 AI-Powered Features
+## 🤖 AI Features
 
-### Critical AI Decisions for Complex Forms
+This migrator makes no AI calls and needs no Anthropic API key. Its AI client was removed in issue #23 because nothing in the migration could reach it:
 
-1. **Calculation Complexity Assessment**: Determines handling strategy
-   - **Simple calculations** → Process data fields
-   - **Complex formulas** → Documentation with manual setup
-   - **Aggregations** → Summary fields
-   - **Cross-section calculations** → Process-level data
+- `src/main.py` built the client and passed it to the four transformers, which stored it and never called a method on it. No file called `make_decision`, `batch_decisions` or `analyze_patterns`.
+- The client loaded its prompts from `src/prompts/`, and this migrator never shipped that folder, so even a direct call fell back to fixed rules.
 
-2. **Repeating Section Transformation**: Complex structural decisions
-   - **Simple repeating fields** → Table field
-   - **Complex repeating sections** → Multiple process instances
-   - **Nested repeating** → Documentation for manual setup
-   - **Calculations on repeating data** → Summary fields
-
-3. **Multi-Page Form Optimization**: Creates logical workflows
-   - Analyzes page break placement
-   - Groups related fields into steps
-   - Preserves logical flow
-   - Optimizes for user experience
-
-4. **Conditional Logic Mapping**: Preserves business rules
-   - Show/hide conditions → Step visibility
-   - Conditional requirements → Field rules
-   - Dynamic values → Process calculations
-   - Workflow triggers → Process automation
+Every decision is made by the migrator's own rules. Where this README elsewhere says the migrator uses AI, for example an "AI Strategy" line, that describes a design that was never connected to the migration code.
 
 ## 📊 Field Type Mapping
 
@@ -372,7 +341,6 @@ Cognito Forms' powerful calculation engine requires special handling:
 - `conditional_logic.json` - Logic mappings
 - `unsupported_features.md` - Manual setup needed
 - `calculation_formulas.md` - Formula documentation
-- `ai_decisions.json` - AI reasoning
 
 ## 🔒 Security
 

@@ -47,7 +47,6 @@ Migrate your ClickUp workspaces to Tallyfy with this fully-implemented productio
 ### API Access Requirements
 - **ClickUp**: Personal API token from Settings > Apps > API Token
 - **Tallyfy**: Admin access to create OAuth application at https://app.tallyfy.com/organization/settings/integrations
-- **Anthropic (Optional)**: API key for AI features from https://console.anthropic.com/
 
 ## 🔧 Installation
 
@@ -88,20 +87,9 @@ MIGRATE_SPRINTS=true  # Include sprint data
 VIEW_TRANSFORMATION=intelligent  # intelligent, list_only, or preserve_all
 ```
 
-### Optional AI Configuration (Recommended)
+### No AI configuration
 
-```env
-# Anthropic API for intelligent decisions
-ANTHROPIC_API_KEY=sk-ant-api03-...
-AI_MODEL=claude-opus-5-5
-AI_MAX_TOKENS=16000
-
-# AI Feature Flags
-AI_ASSESS_VIEW_COMPLEXITY=true
-AI_MAP_CUSTOM_FIELDS=true
-AI_OPTIMIZE_HIERARCHY=true
-AI_TRANSFORM_AUTOMATIONS=true
-```
+This migrator makes no AI calls and needs no Anthropic API key. See the AI Features section below.
 
 ## 🚦 Quick Start
 
@@ -112,7 +100,6 @@ AI_TRANSFORM_AUTOMATIONS=true
 This verifies:
 - API connectivity to both platforms
 - Workspace access and permissions
-- AI availability (if configured)
 - Data volume estimates
 
 ### 2. Dry Run (Preview without changes)
@@ -133,46 +120,14 @@ Executes complete migration with progress tracking.
 ```
 Continues from last checkpoint if migration was interrupted.
 
-## 🤖 AI-Powered Features
+## 🤖 AI Features
 
-### When AI Assists
+This migrator makes no AI calls and needs no Anthropic API key. Its AI client was removed in issue #23 because nothing in the migration could reach it:
 
-1. **View Transformation**: Intelligently converts ClickUp views to workflows
-   - List View → Sequential workflow
-   - Board View → Kanban-inspired multi-step process
-   - Calendar View → Date-driven workflow with deadlines
-   - Gantt View → Dependency-based sequential process
-   - Timeline View → Phased workflow approach
+- `src/main.py` built the client and passed it to the four transformers, which stored it and never called a method on it. No file called `make_decision`, `batch_decisions` or `analyze_patterns`.
+- The client loaded its prompts from `src/prompts/`, and this migrator never shipped that folder, so even a direct call fell back to fixed rules.
 
-2. **Custom Field Mapping**: Maps ClickUp's 15+ field types
-   - Relationship fields → Reference dropdowns
-   - Formula fields → Calculated text (preserved)
-   - Progress fields → Percentage tracking
-   - Rating fields → Scale selection
-   - Location fields → Address text
-
-3. **Hierarchy Optimization**: Flattens or preserves structure
-   - Deep nesting → Logical grouping
-   - Subtask chains → Step sequences
-   - Folder structure → Category organization
-
-4. **Automation Translation**: Converts ClickUp automations
-   - Trigger mapping to Tallyfy events
-   - Condition transformation
-   - Action sequence preservation
-
-### AI Decision Transparency
-- All decisions logged with confidence scores
-- Low confidence (<0.7) flagged for review
-- Fallback to heuristic rules when AI unavailable
-- Edit prompts in `src/prompts/` to customize
-
-### Running Without AI
-The migrator works perfectly without AI using smart defaults:
-- List views → Direct task mapping
-- Custom fields → Type-based mapping
-- Automations → Rule-based transformation
-- Hierarchy → Preserve structure
+Every decision is made by the migrator's own rules. Where this README elsewhere says the migrator uses AI, for example an "AI Strategy" line, that describes a design that was never connected to the migration code.
 
 ## 📊 Migration Phases
 

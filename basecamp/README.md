@@ -51,7 +51,6 @@ Transform your Basecamp project-centric collaboration platform with its communic
 
 - **Basecamp**: OAuth 2.0 application or personal access token
 - **Tallyfy**: Admin access to create OAuth application at https://app.tallyfy.com/organization/settings/integrations
-- **Anthropic (Optional)**: API key for AI features from https://console.anthropic.com/
 
 ## 🔧 Installation
 
@@ -96,21 +95,9 @@ MESSAGE_HANDLING=documentation  # Options: documentation, comments, skip
 CAMPFIRE_PRESERVATION=comments  # Options: comments, documentation, skip
 ```
 
-### Optional AI Configuration (Strongly Recommended)
+### No AI configuration
 
-```env
-# Anthropic API for intelligent decisions
-ANTHROPIC_API_KEY=sk-ant-api03-...
-AI_MODEL=claude-opus-5-5
-AI_MAX_TOKENS=16000
-
-# AI Feature Flags
-AI_CONSOLIDATE_PROJECTS=true
-AI_SEQUENCE_TODOS=true
-AI_TRANSFORM_CARD_TABLES=true
-AI_EXTRACT_WORKFLOWS=true
-AI_PRESERVE_CONTEXT=true
-```
+This migrator makes no AI calls and needs no Anthropic API key. See the AI Features section below.
 
 ## 🚦 Quick Start
 
@@ -121,7 +108,6 @@ AI_PRESERVE_CONTEXT=true
 This verifies:
 - API connectivity to both platforms
 - Account access permissions
-- AI availability (if configured)
 - Project structure analysis
 
 ### 2. Dry Run (Preview without changes)
@@ -142,57 +128,14 @@ Executes complete migration with progress tracking.
 ```
 Continues from last checkpoint if migration was interrupted.
 
-## 🤖 AI-Powered Features
+## 🤖 AI Features
 
-This migrator includes sophisticated AI to handle Basecamp's unique project-centric paradigm:
+This migrator makes no AI calls and needs no Anthropic API key. Its AI client was removed in issue #23 because nothing in the migration could reach it:
 
-### When AI Assists
+- `src/main.py` built the client and passed it to the four transformers, which stored it and never called a method on it. No file called `make_decision`, `batch_decisions` or `analyze_patterns`.
+- The client loaded its prompts from `src/prompts/`, and this migrator never shipped that folder, so even a direct call fell back to fixed rules.
 
-1. **Project Consolidation**: Transforms project containers into workflows
-   - Analyzes project activity and structure
-   - Identifies workflow patterns within projects
-   - Consolidates scattered elements (to-dos, cards, messages)
-   - Creates cohesive processes from project chaos
-
-2. **To-do List Sequencing**: Creates workflows from flat lists
-   - Analyzes to-do list names and contents
-   - Determines logical task sequences
-   - Groups related to-dos into workflow steps
-   - Handles Basecamp's flat structure intelligently
-
-3. **Card Table Transformation**: Converts Kanban boards to workflows
-   - Maps columns to sequential steps
-   - Handles "Triage", "Not Now", "On Hold" special columns
-   - Creates conditional logic for card flow
-   - Preserves visual workflow intent
-
-4. **Communication Context Preservation**: Maintains project discussions
-   - Extracts process documentation from messages
-   - Preserves important context as instructions
-   - Maps Campfire discussions to relevant tasks
-   - Maintains team knowledge
-
-5. **Shape Up Methodology Adaptation**: Handles 6-week cycles
-   - Identifies cycle-based projects
-   - Maps betting table decisions to priorities
-   - Converts appetites to time estimates
-   - Preserves circuit breaker concepts
-
-### AI Decision Transparency
-- Project analysis reasoning documented
-- To-do sequencing logic explained
-- Card table transformation mapped
-- Communication extraction detailed
-- Low confidence items (<0.7) flagged
-- Edit prompts in `src/prompts/` to customize
-
-### Running Without AI
-The migrator works without AI using conservative patterns:
-- Projects → Individual blueprints
-- To-do lists → Simple task lists
-- Card tables → Three-step workflows
-- Messages → Attached documentation
-- Manual sequencing required
+Every decision is made by the migrator's own rules. Where this README elsewhere says the migrator uses AI, for example an "AI Strategy" line, that describes a design that was never connected to the migration code.
 
 ## 📊 Migration Phases
 
@@ -447,7 +390,6 @@ export LOG_LEVEL=DEBUG
 - `communication_preservation.csv` - Message/chat handling
 - `card_table_transformations.json` - Kanban conversions
 - `errors.log` - Detailed error information
-- `ai_decisions.json` - AI reasoning for transformations
 - `manual_review.md` - Items requiring attention
 
 ### Report Contents

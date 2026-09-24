@@ -96,7 +96,6 @@ def configure_module_loggers():
     module_configs = {
         'api.nextmatter_client': logging.DEBUG,
         'api.tallyfy_client': logging.DEBUG,
-        'api.ai_client': logging.INFO,
         'transformers.field_transformer': logging.INFO,
         'transformers.template_transformer': logging.INFO,
         'transformers.instance_transformer': logging.INFO,
