@@ -13,11 +13,11 @@ Determine the best transformation strategy:
 3. Training requirements for users
 
 Respond with JSON:
-{
+{{
   "transformation_strategy": "description",
   "estimated_steps": N,
   "requires_training": true/false,
   "user_impact": "low|medium|high",
   "reasoning": "explanation",
   "confidence": 0.0-1.0
-}
+}}

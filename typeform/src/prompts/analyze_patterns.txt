@@ -1,0 +1,22 @@
+Find patterns across these Typeform items so the Tallyfy migration can treat similar items the same way.
+
+Items:
+- Pattern type: {pattern_type}
+- Item count: {item_count}
+- Distinct items: {unique_values}
+- First items, as samples: {samples}
+
+Look for:
+- Items that share a structure and can use one transformation
+- Items that differ in ways that need manual review
+- Values that repeat often enough to become dropdown options or defaults
+
+Respond with JSON:
+{{
+  "patterns_found": N,
+  "patterns": [
+    {{"description": "What the items share", "count": N, "recommendation": "How to migrate them"}}
+  ],
+  "reasoning": "Summary of what was found",
+  "confidence": 0.0-1.0
+}}

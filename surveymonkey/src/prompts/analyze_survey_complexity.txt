@@ -24,17 +24,17 @@ Consider:
 - Optimal questions per step (10-15 ideal, max 20)
 
 Respond with JSON:
-{
+{{
   "strategy": "single_kickoff|multi_step_simple|multi_step_moderate|complex_workflow",
   "complexity": "simple|medium|complex",
   "recommended_steps": N,
   "reasoning": "Detailed explanation of the decision",
   "grouping_suggestions": [
-    {"step_name": "Step 1 Name", "question_count": N, "question_types": ["type1", "type2"]},
-    {"step_name": "Step 2 Name", "question_count": N, "question_types": ["type3", "type4"]}
+    {{"step_name": "Step 1 Name", "question_count": N, "question_types": ["type1", "type2"]}},
+    {{"step_name": "Step 2 Name", "question_count": N, "question_types": ["type3", "type4"]}}
   ],
   "complexity_score": 0.0-1.0,
   "confidence": 0.0-1.0,
   "warnings": ["Any issues or concerns"],
   "manual_review_needed": true/false
-}
+}}

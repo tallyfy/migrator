@@ -12,11 +12,11 @@ Create a logical workflow that:
 - Maintains the original flow logic
 
 Respond with JSON:
-{
+{{
   "steps": [
-    {"name": "Step Name", "type": "task|approval", "task_count": N},
+    {{"name": "Step Name", "type": "task|approval", "task_count": N}},
     ...
   ],
   "reasoning": "Brief explanation",
   "confidence": 0.0-1.0
-}
+}}

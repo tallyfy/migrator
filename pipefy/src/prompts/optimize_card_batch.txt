@@ -14,10 +14,10 @@ Calculate batch size that:
 - Ensures reliable processing
 
 Respond with JSON:
-{
+{{
   "batch_size": N,
   "estimated_batches": N,
   "estimated_time_minutes": N,
   "reasoning": "explanation",
   "confidence": 0.0-1.0
-}
+}}

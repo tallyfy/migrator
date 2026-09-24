@@ -9,9 +9,9 @@ Process Street field:
 Available Tallyfy types: {tallyfy_types}
 
 Consider the field's purpose and typical usage. Respond with JSON:
-{
+{{
   "tallyfy_type": "selected_type",
   "transform_needed": true/false,
   "validation": "email|phone|url|none",
   "confidence": 0.0-1.0
-}
+}}
