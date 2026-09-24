@@ -329,10 +329,16 @@ ASSISTANT = os.path.join(REPO_ROOT, 'bpmn', 'src', 'migration_assistant.py')
 ASSISTANT_MODEL = 'claude-haiku-4-5-20251001'
 ELEMENT = {'type': 'userTask', 'id': 't1', 'name': 'Review'}
 CONTEXT = {'previous': 'start', 'next': ['end']}
-ASSISTANT_REPLY = json.dumps({
+# One object that satisfies both calls: the element-analysis keys and the four
+# lists the optimization schema requires.
+OPTIMIZATION_LISTS = {
+    'optimizations': ['probe'], 'complexity_reduction': [],
+    'unsupported_pattern_alternatives': [], 'tallyfy_best_practices': [],
+}
+ASSISTANT_REPLY = json.dumps(dict({
     'confidence': 0.8, 'strategy': 'transform', 'tallyfy_mapping': {},
     'manual_steps': [], 'warnings': [], 'reasoning': 'probe',
-})
+}, **OPTIMIZATION_LISTS))
 
 
 def _assistant(monkeypatch, fake):
@@ -361,10 +367,18 @@ def test_assistant_keeps_haiku_and_sends_no_sampling_parameter_or_effort(monkeyp
         assert kwargs.get('model') == ASSISTANT_MODEL
         for param in SAMPLING_PARAMS:
             assert param not in kwargs, f'migration_assistant sends {param}'
-        for param in ('extra_body', 'output_config', 'thinking'):
-            assert param not in kwargs, f'migration_assistant sends {param}; Haiku 4.5 400s on effort'
+        for param in ('output_config', 'thinking'):
+            assert param not in kwargs, f'migration_assistant sends {param} as a named argument'
+        assert 'effort' not in json.dumps(kwargs.get('extra_body') or {}), (
+            'migration_assistant sends effort; Haiku 4.5 400s on it'
+        )
+    # Element analysis sends nothing extra. The optimization call asks for
+    # structured output, which Haiku 4.5 supports (test_bpmn_optimization_reply.py).
+    assert 'extra_body' not in fake.calls[0]
+    assert set(fake.calls[1]['extra_body']) == {'output_config'}
+    assert set(fake.calls[1]['extra_body']['output_config']) == {'format'}
     assert decision.strategy == 'transform' and decision.ai_reasoning == 'probe'
-    assert optimization == json.loads(ASSISTANT_REPLY)
+    assert optimization == OPTIMIZATION_LISTS
     # A live optimization reply ran to about 3,200 output tokens. At the old 1500
     # the JSON was cut off and the method returned its error result.
     assert fake.calls[1].get('max_tokens') == 8000, (
@@ -384,7 +398,8 @@ def test_assistant_reply_with_no_text_takes_the_fallback(monkeypatch, content, s
     decision = assistant._ai_analyze_element(ELEMENT, CONTEXT)
     optimization = assistant.suggest_process_optimization({'task_count': 3})
 
-    assert len(fake.calls) == 2
+    # One element call, then the optimization call and its one retry.
+    assert len(fake.calls) == 3
     assert decision == assistant._fallback_analyze_element(ELEMENT, CONTEXT)
     assert 'error' in optimization, f'an answer with no text was treated as content: {optimization!r}'
     assert optimization.get('recommendations') == 'Manual optimization recommended'
