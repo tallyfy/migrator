@@ -11,10 +11,10 @@ Pipefy field:
 Available Tallyfy types: {tallyfy_types}
 
 Consider data type compatibility and user experience. Respond with JSON:
-{
+{{
   "tallyfy_type": "selected_type",
   "needs_validation": true/false,
   "transform_required": true/false,
   "data_loss_risk": "none|low|high",
   "confidence": 0.0-1.0
-}
+}}

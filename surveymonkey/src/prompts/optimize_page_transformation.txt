@@ -1,0 +1,27 @@
+Group the questions of this SurveyMonkey survey into Tallyfy workflow steps.
+
+Survey details:
+- Survey title: {survey_title}
+- Total questions: {total_questions}
+- Page count: {page_count}
+- Average questions per page: {avg_questions_per_page}
+- Pages in order, with their question counts: {pages}
+
+Number the questions from 0 across all pages in page order. Each step covers the
+questions from start_index up to but not including end_index. Cover every question
+exactly once, in order, with no gaps or overlaps.
+
+Consider:
+- SurveyMonkey pages are natural step boundaries
+- 10 to 15 questions per step is ideal, 20 at most
+- Split a large page into several steps, and merge small related pages
+- Give each step a short name a respondent would understand
+
+Respond with JSON:
+{{
+  "groups": [
+    {{"name": "Step name", "description": "What this step collects", "start_index": 0, "end_index": 10, "requires_validation": false}}
+  ],
+  "reasoning": "Why this grouping",
+  "confidence": 0.0-1.0
+}}

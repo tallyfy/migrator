@@ -13,8 +13,8 @@ Determine complexity level:
 3. "complex" - High complexity, requires careful transformation
 
 Respond with JSON:
-{
+{{
   "strategy": "simple" | "moderate" | "complex",
   "reasoning": "Brief explanation",
   "confidence": 0.0-1.0
-}
+}}

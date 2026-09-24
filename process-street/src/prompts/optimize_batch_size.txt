@@ -14,9 +14,9 @@ Recommend batch size that:
 - Ensures reliable processing
 
 Respond with JSON:
-{
+{{
   "batch_size": N,
   "reasoning": "Brief explanation",
   "estimated_time": "time estimate",
   "confidence": 0.0-1.0
-}
+}}

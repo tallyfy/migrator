@@ -14,11 +14,11 @@ Create optimal step structure that:
 - Maintains data capture requirements
 
 Respond with JSON:
-{
+{{
   "steps": [
-    {"name": "Step Name", "type": "task|approval|form", "description": "purpose"},
+    {{"name": "Step Name", "type": "task|approval|form", "description": "purpose"}},
     ...
   ],
   "reasoning": "explanation",
   "confidence": 0.0-1.0
-}
+}}

@@ -1,0 +1,22 @@
+Decide how to migrate this incomplete SurveyMonkey response into Tallyfy.
+
+Response details:
+- Response status: {response_status}
+- Completion percentage: {completion_percentage}
+- Time spent (seconds): {total_time}
+
+Choose one action:
+1. "create_draft" - Migrate it as a draft process, marked partial, so someone can finish it
+2. "skip" - Do not migrate it, because too little was answered to be useful
+
+Consider:
+- A response with most questions answered is usually worth keeping
+- A response abandoned after a few seconds is usually noise
+- Skipped data cannot be recovered later, so keep a response when unsure
+
+Respond with JSON:
+{{
+  "action": "create_draft|skip",
+  "reasoning": "Why this action",
+  "confidence": 0.0-1.0
+}}
