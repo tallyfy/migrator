@@ -852,6 +852,8 @@ test_data/
 ## 🎉 Production Accomplishments
 
 ### What's Been Built (ALL COMPLETE)
+Reading of 2026-10-29 (#28): not all complete, for the same reasons as the reading under "Production Ready (15/15)" (#27). Eight vendors never reach a create call (#3, still open), and eleven migrators ship no AI client since #23. This heading dates from 2025-08-18.
+
 All 15 migrators now have:
 - ✅ **Production API Clients**: Real endpoints, not templates
 - ✅ **Vendor-Specific Rate Limiting**: From 50 req/10s to 10M complexity points
