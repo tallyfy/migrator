@@ -613,6 +613,8 @@ All migrators must:
 
 ### ✅ Production Ready (15/15) - ALL COMPLETE
 
+Reading of 2026-10-29 (#27): not all complete. This heading dates from 2025-08-18. Since then, "Still open (#3)" under kick-off fields says eight vendors (basecamp, clickup, cognito-forms, google-forms, jotform, nextmatter, trello, wrike) never reach a create call, and #3 is still open. The AI section says eleven migrators ship no AI client since #23 (2026-09-24). Read the list below as the platforms covered, not as finished migrators.
+
 #### Workflow Management Platforms
 - **Process Street**: Complete workflow automation, conditional logic, variables, approvals
 - **Pipefy**: GraphQL API, Kanban→Sequential paradigm shift, phase connections
