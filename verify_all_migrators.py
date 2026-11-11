@@ -56,21 +56,46 @@ class MigratorVerifier:
         'Best Practices', 'Support'
     ]
     
-    # Other titles the vendors' READMEs use for a required section. A section
-    # counts when the README names it anywhere (the original test), or when a
-    # heading outside a code block contains one of these.
+    # The words that name each required section, taken from the section's name
+    # and its definition in CLAUDE.md ("Required README Sections", quoted after
+    # each entry). One list per section, used the same way for every vendor: a
+    # section counts when the README names it anywhere (the original test), or
+    # when a heading or a bold label ("**Label**:") outside a code block
+    # contains one of these words.
     README_SECTION_ALIASES = {
-        'Installation': ['setup'],
-        'Data Mapping': ['object mapping', 'field type mapping', 'question type mapping',
-                         'mapping rules'],
-        'API Integration': ['api implementation details', 'api compatibility'],
-        'Paradigm Shifts': ['paradigm'],
-        'Migration Process': ['migration phases'],
-        'Error Handling': ['recovery options'],
-        'Best Practices': ['recommended approach'],
+        'Requirements': ['requirements', 'prerequisites'],  # Include Anthropic API key
+        'Installation': ['install', 'setup', 'set up'],  # Step-by-step setup
+        'Configuration': ['configuration', 'environment variables'],  # AI configuration details
+        'Quick Start': ['quick start', 'getting started'],  # With/without AI
+        # 5-phase pattern. These READMEs describe it in their "Migration Phases"
+        # section, as kissflow does inside its Architecture section.
+        'Architecture': ['architecture', '5-phase', 'five-phase', 'migration phases'],
+        'AI-Powered Features': ['ai-powered features', 'ai features', 'ai-assisted', 'when ai'],  # What AI enhances
+        'Data Mapping': ['data mapping', 'object mapping', 'field mapping', 'field type mapping',
+                         'question type mapping', 'mapping rules'],  # Link to OBJECT_MAPPING.md
+        'API Integration': ['api integration', 'api implementation', 'api compatibility',
+                            'api access', 'authentication'],  # Authentication details
+        'Features': ['features', 'capabilities'],  # Core capabilities
+        # Common scenarios: a section of runnable usage scenarios counts.
+        'Usage Examples': ['usage', 'example', 'scenario', 'selective migration', 'specific phases',
+                           'run migration', 'running the migration', 'command line options'],
+        'Paradigm Shifts': ['paradigm', 'critical transformation'],  # Critical transformations
+        'Limitations': ['limitation', 'cannot migrate', 'not migrated'],  # What cannot migrate
+        'Migration Process': ['migration process', 'migration phases', 'migration steps'],  # Phase details
+        'Error Handling': ['error handling', 'recover', 'resume', 'checkpoint', 'rollback',
+                           'retry'],  # Recovery strategies
+        'Performance': ['performance', 'processing speed', 'migration times'],  # Time estimates
+        'Troubleshooting': ['troubleshooting', 'common issues'],  # Common issues
+        'Best Practices': ['best practice', 'recommendation', 'recommended approach',
+                           'before migration', 'before running migration', 'during migration',
+                           'pre-migration checklist'],  # Recommendations
+        'Support': ['support', 'getting help'],  # Getting help
     }
     
-    # Required OBJECT_MAPPING.md sections, and the other titles the vendors use for them
+    # Required OBJECT_MAPPING.md sections, and the words that name each one.
+    # CLAUDE.md does not define these, so the words come from the section names
+    # and the sections the template vendors (basecamp, clickup, cognito-forms)
+    # carry under those names. Used the same way as README_SECTION_ALIASES.
     OBJECT_MAPPING_SECTIONS = [
         'core object mappings',
         'field type mappings',
@@ -82,17 +107,28 @@ class MigratorVerifier:
         'validation checklist'
     ]
     OBJECT_MAPPING_SECTION_ALIASES = {
-        'core object mappings': ['core objects', 'core platform concepts', 'element mappings'],
-        'field type mappings': ['field mapping', 'field types', 'question type mapping',
-                                'column type mapping'],
-        'paradigm shifts': ['paradigm shift'],
-        'data preservation': ['preserved in migration'],
-        'migration complexity': ['medium complexity', 'complex workflows'],
+        # The vendor's main objects (organizations, users, templates, instances)
+        'core object mappings': ['core object', 'terminology', 'object mapping', 'element mappings',
+                                 'core platform concepts', 'organization & user mappings',
+                                 'template & workflow mappings', 'instance & process mappings'],
+        'field type mappings': ['field type', 'field mapping', 'question type', 'column type'],
+        'paradigm shifts': ['paradigm shift', 'critical transformation'],
+        # What the migration keeps
+        'data preservation': ['preserv', 'fully supported', 'successfully migrated',
+                              'what gets migrated'],
+        # Also passes on a section split into size or complexity tiers (see has_tiers)
+        'migration complexity': ['complexity'],
+        # How the features that need more than a direct mapping are handled
+        'special handling': ['special', 'edge case', 'complex transformation',
+                             'complex field transformation', 'module-specific', 'partial support',
+                             'manual adjustment', 'requires manual', 'manual work'],
         'known limitations': ['limitation', 'not supported', 'cannot be migrated',
-                              'cannot migrate', 'lost in migration'],
-        'validation checklist': ['post-migration validation', 'pre-migration checklist',
-                                 'validation checkpoints'],
+                              'cannot migrate', 'lost in migration', 'non-migrated'],
+        'validation checklist': ['checklist', 'validat', 'required checks', 'verification'],
     }
+    
+    # Words that name a size or complexity tier ("Small Projects (< 20 tasks)")
+    COMPLEXITY_TIERS = ('simple', 'small', 'medium', 'large', 'complex', 'enterprise')
     
     # The README section that only applies to a migrator that makes AI calls
     AI_README_SECTION = 'AI-Powered Features'
@@ -283,18 +319,48 @@ class MigratorVerifier:
         return passed, issues
     
     def headings(self, text: str) -> List[str]:
-        """The document's heading lines, lower-cased, skipping fenced code blocks"""
+        """The document's section titles, lower-cased, skipping fenced code
+        blocks: every heading line, and every bold label that opens a line
+        item ("- **Best practice**: Run during off-hours")."""
+        return [title for _, title in self.titled_lines(text)]
+    
+    def titled_lines(self, text: str) -> List[Tuple[int, str]]:
+        """(heading level, lower-cased title) for each section title outside
+        code blocks. A bold label counts as a title one level below any heading."""
         found, in_code = [], False
         for line in text.split('\n'):
             if line.lstrip().startswith('```'):
                 in_code = not in_code
-            elif not in_code and re.match(r'#{1,6} ', line):
-                found.append(line.lower())
+                continue
+            if in_code:
+                continue
+            heading = re.match(r'(#{1,6}) ', line)
+            if heading:
+                found.append((len(heading.group(1)), line.lower()))
+                continue
+            for label in re.findall(r'\*\*([^*\n]+?)\*\*\s*:|\*\*([^*\n]+?):\*\*', line):
+                found.append((7, (label[0] or label[1]).lower()))
         return found
+    
+    def has_tiers(self, text: str) -> bool:
+        """True when some heading's direct subsections include two or more size
+        or complexity tiers, such as "Small Projects (< 20 tasks)" and "Large
+        Projects (100+ tasks)" under "Migration Strategies"."""
+        titles = [(level, title) for level, title in self.titled_lines(text) if level <= 6]
+        for i, (level, _) in enumerate(titles):
+            tiers = 0
+            for child_level, child in titles[i + 1:]:
+                if child_level <= level:
+                    break
+                if child_level == level + 1 and any(word in child for word in self.COMPLEXITY_TIERS):
+                    tiers += 1
+            if tiers >= 2:
+                return True
+        return False
     
     def has_section(self, section: str, content: str, headings: List[str],
                     aliases: Dict[str, List[str]]) -> bool:
-        """True when the lower-cased document names the section, or a heading uses another title for it"""
+        """True when the lower-cased document names the section, or a section title uses a word for it"""
         if section.lower() in content:
             return True
         return any(alias in heading for alias in aliases.get(section, []) for heading in headings)
@@ -706,6 +772,8 @@ class MigratorVerifier:
         
         for section in self.OBJECT_MAPPING_SECTIONS:
             if self.has_section(section, content, headings, self.OBJECT_MAPPING_SECTION_ALIASES):
+                passed += 1
+            elif section == 'migration complexity' and self.has_tiers(content):
                 passed += 1
             else:
                 issues.append(f"OBJECT_MAPPING missing section: {section}")
