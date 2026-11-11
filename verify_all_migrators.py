@@ -56,6 +56,44 @@ class MigratorVerifier:
         'Best Practices', 'Support'
     ]
     
+    # Other titles the vendors' READMEs use for a required section. A section
+    # counts when the README names it anywhere (the original test), or when a
+    # heading outside a code block contains one of these.
+    README_SECTION_ALIASES = {
+        'Installation': ['setup'],
+        'Data Mapping': ['object mapping', 'field type mapping', 'question type mapping',
+                         'mapping rules'],
+        'API Integration': ['api implementation details', 'api compatibility'],
+        'Paradigm Shifts': ['paradigm'],
+        'Migration Process': ['migration phases'],
+        'Error Handling': ['recovery options'],
+        'Best Practices': ['recommended approach'],
+    }
+    
+    # Required OBJECT_MAPPING.md sections, and the other titles the vendors use for them
+    OBJECT_MAPPING_SECTIONS = [
+        'core object mappings',
+        'field type mappings',
+        'paradigm shifts',
+        'data preservation',
+        'migration complexity',
+        'special handling',
+        'known limitations',
+        'validation checklist'
+    ]
+    OBJECT_MAPPING_SECTION_ALIASES = {
+        'core object mappings': ['core objects', 'core platform concepts', 'element mappings'],
+        'field type mappings': ['field mapping', 'field types', 'question type mapping',
+                                'column type mapping'],
+        'paradigm shifts': ['paradigm shift'],
+        'data preservation': ['preserved in migration'],
+        'migration complexity': ['medium complexity', 'complex workflows'],
+        'known limitations': ['limitation', 'not supported', 'cannot be migrated',
+                              'cannot migrate', 'lost in migration'],
+        'validation checklist': ['post-migration validation', 'pre-migration checklist',
+                                 'validation checkpoints'],
+    }
+    
     # The README section that only applies to a migrator that makes AI calls
     AI_README_SECTION = 'AI-Powered Features'
     
@@ -69,6 +107,7 @@ class MigratorVerifier:
             self.base_path = Path(__file__).resolve().parent
         else:
             self.base_path = Path(os.path.expanduser(base_path))
+        self._live_files = {}
         self.results = {}
         self.summary = {
             'total_migrators': len(self.EXPECTED_MIGRATORS),
@@ -231,19 +270,233 @@ class MigratorVerifier:
         passed = 0
         issues = []
         no_ai = self.declares_no_ai(path)
+        headings = self.headings(content)
         
         for section in self.README_SECTIONS:
             if section == self.AI_README_SECTION and no_ai:
                 passed += 1  # a migrator that makes no AI calls has no AI features to list
-            elif section.lower() in content:
+            elif self.has_section(section, content, headings, self.README_SECTION_ALIASES):
                 passed += 1
             else:
                 issues.append(f"README missing section: {section}")
         
         return passed, issues
     
+    def headings(self, text: str) -> List[str]:
+        """The document's heading lines, lower-cased, skipping fenced code blocks"""
+        found, in_code = [], False
+        for line in text.split('\n'):
+            if line.lstrip().startswith('```'):
+                in_code = not in_code
+            elif not in_code and re.match(r'#{1,6} ', line):
+                found.append(line.lower())
+        return found
+    
+    def has_section(self, section: str, content: str, headings: List[str],
+                    aliases: Dict[str, List[str]]) -> bool:
+        """True when the lower-cased document names the section, or a heading uses another title for it"""
+        if section.lower() in content:
+            return True
+        return any(alias in heading for alias in aliases.get(section, []) for heading in headings)
+    
+    def live_files(self, path: Path) -> List[Path]:
+        """src/main.py and every file it reaches through imports, inside this
+        migrator or the repo's shared/ folder. A file nothing imports is not live,
+        so code in it is not evidence of what the migrator does."""
+        key = str(path)
+        if key not in self._live_files:
+            allowed = [path.resolve(), (self.base_path / 'shared').resolve()]
+            found, todo = [], [path / 'src' / 'main.py']
+            while todo:
+                py_file = todo.pop().resolve()
+                if py_file in found or not py_file.is_file():
+                    continue
+                if not any(self._is_inside(py_file, folder) for folder in allowed):
+                    continue
+                found.append(py_file)
+                try:
+                    with open(py_file, 'r') as f:
+                        tree = ast.parse(f.read())
+                except SyntaxError:
+                    continue
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        for alias in node.names:
+                            todo.extend(self._resolve_import(alias.name, 0, py_file, path, []))
+                    elif isinstance(node, ast.ImportFrom):
+                        todo.extend(self._resolve_import(node.module or '', node.level, py_file, path,
+                                                         [alias.name for alias in node.names]))
+            self._live_files[key] = sorted(found)
+        return self._live_files[key]
+    
+    def _is_inside(self, py_file: Path, folder: Path) -> bool:
+        try:
+            py_file.relative_to(folder)
+            return True
+        except ValueError:
+            return False
+    
+    def _resolve_import(self, module: str, level: int, from_file: Path, path: Path,
+                        names: List[str]) -> List[Path]:
+        """The files one import statement loads. Absolute imports are tried from
+        src/, the migrator folder, the repo root and shared/, the folders the
+        migrators put on sys.path."""
+        if level:
+            root = from_file.parent
+            for _ in range(level - 1):
+                root = root.parent
+            roots = [root]
+        else:
+            roots = [path / 'src', path, self.base_path, self.base_path / 'shared']
+        parts = module.split('.') if module else []
+        for root in roots:
+            target = root.joinpath(*parts)
+            found = []
+            if parts and target.with_suffix('.py').is_file():
+                found.append(target.with_suffix('.py'))
+            if (target / '__init__.py').is_file():
+                found.append(target / '__init__.py')
+            found.extend(target / f'{name}.py' for name in names if (target / f'{name}.py').is_file())
+            if found:
+                # Importing a.b.c also runs a/__init__.py and a/b/__init__.py
+                found.extend(root.joinpath(*parts[:i]) / '__init__.py' for i in range(1, len(parts))
+                             if (root.joinpath(*parts[:i]) / '__init__.py').is_file())
+                return found
+        return []
+    
+    def _walk_in_functions(self, node, function=None):
+        """Every node under this one, with the function that encloses it (None at module level)"""
+        for child in ast.iter_child_nodes(node):
+            yield function, child
+            inner = child if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) else function
+            yield from self._walk_in_functions(child, inner)
+    
+    def _mentions(self, node, word: str) -> bool:
+        """True when a name or attribute under this node contains the word"""
+        return any(word in (n.id if isinstance(n, ast.Name) else n.attr).lower()
+                   for n in ast.walk(node) if isinstance(n, (ast.Name, ast.Attribute)))
+    
+    def live_evidence(self, path: Path) -> Dict[str, str]:
+        """Where the migrator's live code rate-limits, batches and frees memory.
+        
+        Returns 'file:line' of the first piece of evidence for each, or None.
+        Only live files count (see live_files), and only code at module level
+        or in a function some live code calls by name. Comments and strings
+        never count.
+        
+        - rate_limiting: the HTTP 429 status as a number, or a sleep inside a
+          function whose name says rate_limit or throttle.
+        - batch_processing: a call to a live function whose name says batch,
+          or a range() step or slice bound that names a batch size.
+        - memory_management: gc.collect(), or del of a whole variable (del of
+          a dict key removes a key, it frees nothing).
+        """
+        trees = []
+        for py_file in self.live_files(path):
+            try:
+                with open(py_file, 'r') as f:
+                    trees.append((py_file, ast.parse(f.read())))
+            except SyntaxError:
+                continue
+        
+        def call_name(call):
+            return call.func.attr if isinstance(call.func, ast.Attribute) else getattr(call.func, 'id', '')
+        
+        called, defined = set(), set()
+        for _, tree in trees:
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    called.add(call_name(node))
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    defined.add(node.name)
+        
+        evidence = {'rate_limiting': None, 'batch_processing': None, 'memory_management': None}
+        for py_file, tree in trees:
+            try:
+                where_file = py_file.relative_to(self.base_path.resolve())
+            except ValueError:
+                where_file = py_file
+            for function, node in self._walk_in_functions(tree):
+                if function is not None and function.name != '__init__' and function.name not in called:
+                    continue
+                found = []
+                if isinstance(node, ast.Constant) and type(node.value) is int and node.value == 429:
+                    found.append('rate_limiting')
+                if (isinstance(node, ast.Call) and call_name(node) == 'sleep' and function is not None
+                        and ('rate_limit' in function.name.lower() or 'throttl' in function.name.lower())):
+                    found.append('rate_limiting')
+                if isinstance(node, ast.Call):
+                    name = call_name(node)
+                    if name in defined and 'batch' in name.lower():
+                        found.append('batch_processing')
+                    if name == 'range' and len(node.args) == 3 and self._mentions(node.args[2], 'batch'):
+                        found.append('batch_processing')
+                    if (name == 'collect' and isinstance(node.func, ast.Attribute)
+                            and isinstance(node.func.value, ast.Name) and node.func.value.id == 'gc'):
+                        found.append('memory_management')
+                if isinstance(node, ast.Slice) and node.upper is not None and self._mentions(node.upper, 'batch'):
+                    found.append('batch_processing')
+                if isinstance(node, ast.Delete) and any(isinstance(t, ast.Name) for t in node.targets):
+                    found.append('memory_management')
+                for kind in found:
+                    if evidence[kind] is None:
+                        evidence[kind] = f'{where_file}:{getattr(node, "lineno", 0)}'
+        return evidence
+    
+    def phase_names(self, source: str) -> Tuple[set, set, List[str]]:
+        """The phases main.py runs, read from its code rather than its words.
+        
+        Returns the names it dispatches on (a value compared to a `phase`
+        variable, a list assigned to a `...phases` name, or a `_phase_<name>`
+        method), the numbers of its 'Phase N: ...' strings, and every name seen.
+        """
+        try:
+            tree = ast.parse(source)
+        except SyntaxError:
+            return set(), set(), []
+        named, numbered, seen = set(), set(), []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Compare):
+                left = node.left
+                left_name = left.id if isinstance(left, ast.Name) else getattr(left, 'attr', '')
+                if 'phase' in left_name.lower():
+                    for value in node.comparators:
+                        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                            named.add(value.value.lower())
+            elif isinstance(node, ast.Assign) and isinstance(node.value, (ast.List, ast.Tuple)):
+                targets = [t.id if isinstance(t, ast.Name) else getattr(t, 'attr', '') for t in node.targets]
+                if any('phase' in t.lower() for t in targets):
+                    named.update(e.value.lower() for e in node.value.elts
+                                 if isinstance(e, ast.Constant) and isinstance(e.value, str))
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                match = re.match(r'_?phase_(?:\d+_)?(\w+)$', node.name)
+                if match:
+                    named.add(match.group(1).lower())
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                match = re.search(r'phase\s*(\d+)\s*:\s*(.+)', node.value, re.IGNORECASE)
+                if match:
+                    numbered.add(match.group(1))
+                    seen.append(match.group(2).lower())
+        seen.extend(named)
+        return named, numbered, seen
+    
+    def has_five_phases(self, source: str) -> bool:
+        """True when main.py runs at least five phases, among them a discovery,
+        a users and a validation phase. Vendors name the template and instance
+        phases in their own terms (projects, boards, pipes, cards), so those
+        two are counted, not spelled."""
+        named, numbered, seen = self.phase_names(source)
+        return (max(len(named), len(numbered)) >= 5
+                and any('discover' in name for name in seen)
+                and any(word in name for name in seen for word in ('user', 'member', 'people'))
+                and any('validat' in name for name in seen))
+    
     def check_code_quality(self, path: Path) -> Tuple[int, List[str]]:
-        """Check code quality indicators"""
+        """Check code quality indicators
+        
+        Most checks read src/main.py. Rate limiting, batch processing and
+        memory management usually live in the API clients and transformers, so
+        those three also pass on evidence anywhere in the live code."""
         passed = 0
         issues = []
         checks = {
@@ -282,9 +535,11 @@ class MigratorVerifier:
                 checks['has_type_hints'] = True
                 passed += 1
             
+            evidence = self.live_evidence(path)
+            
             # Check for 5-phase pattern
             phases = ['discovery', 'users', 'templates', 'instances', 'validation']
-            if all(phase in content.lower() for phase in phases):
+            if all(phase in content.lower() for phase in phases) or self.has_five_phases(content):
                 checks['has_5_phases'] = True
                 passed += 1
             else:
@@ -298,15 +553,15 @@ class MigratorVerifier:
                 checks['has_validation'] = True
                 passed += 1
             
-            if 'rate' in content.lower() and 'limit' in content.lower():
+            if ('rate' in content.lower() and 'limit' in content.lower()) or evidence['rate_limiting']:
                 checks['has_rate_limiting'] = True
                 passed += 1
             
-            if 'batch' in content.lower():
+            if 'batch' in content.lower() or evidence['batch_processing']:
                 checks['has_batch_processing'] = True
                 passed += 1
             
-            if 'gc.collect' in content or 'del ' in content:
+            if 'gc.collect' in content or 'del ' in content or evidence['memory_management']:
                 checks['has_memory_management'] = True
                 passed += 1
         else:
@@ -335,9 +590,11 @@ class MigratorVerifier:
         """Every prompt template the migrator's code loads through its AI client.
         
         Same rule as shared/tests/test_prompt_templates.py: a call whose first
-        argument is a literal *.txt name, made on a method the AI client defines,
-        anywhere under src/. Returns (template, 'file:line') pairs, and the names
-        the client has in-code text for (bpmn writes its prompts from code).
+        argument is a literal *.txt name, made on a method the AI client defines.
+        That test reads all of src/; this reads only the live files under src/
+        (see live_files), because a load in a file nothing imports never runs.
+        Returns (template, 'file:line') pairs, and the names the client has
+        in-code text for (bpmn writes its prompts from code).
         """
         with open(self.ai_client_path(path), 'r') as f:
             client_tree = ast.parse(f.read())
@@ -355,7 +612,10 @@ class MigratorVerifier:
                         defaults.add(key.value)
         
         loads = []
-        for py_file in sorted((path / 'src').rglob('*.py')):
+        src = (path / 'src').resolve()
+        for py_file in self.live_files(path):
+            if not self._is_inside(py_file, src):
+                continue
             with open(py_file, 'r') as f:
                 tree = ast.parse(f.read())
             for node in ast.walk(tree):
@@ -367,7 +627,7 @@ class MigratorVerifier:
                 name = (node.func.attr if isinstance(node.func, ast.Attribute)
                         else getattr(node.func, 'id', None))
                 if name in methods:
-                    loads.append((node.args[0].value, f'{py_file.relative_to(path)}:{node.lineno}'))
+                    loads.append((node.args[0].value, f'{py_file.relative_to(path.resolve())}:{node.lineno}'))
         return loads, defaults
     
     def check_ai_integration(self, path: Path) -> Tuple[int, List[str]]:
@@ -442,20 +702,10 @@ class MigratorVerifier:
         
         passed = 0
         issues = []
+        headings = self.headings(content)
         
-        required_sections = [
-            'core object mappings',
-            'field type mappings',
-            'paradigm shifts',
-            'data preservation',
-            'migration complexity',
-            'special handling',
-            'known limitations',
-            'validation checklist'
-        ]
-        
-        for section in required_sections:
-            if section in content:
+        for section in self.OBJECT_MAPPING_SECTIONS:
+            if self.has_section(section, content, headings, self.OBJECT_MAPPING_SECTION_ALIASES):
                 passed += 1
             else:
                 issues.append(f"OBJECT_MAPPING missing section: {section}")
