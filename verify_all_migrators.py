@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
 Comprehensive Migrator Verification Script
-Verifies that all 15 migrators are complete and production-ready
+Verifies that all 17 migrators are complete and production-ready
+
+AI checks follow issue #23: a migrator may ship no AI client on purpose, and
+then its README says it makes no AI calls. A migrator with a client must have
+every prompt template it loads in its src/prompts/ folder, which is where
+ai_client.py reads them from.
 """
 
 import os
@@ -19,9 +24,9 @@ class MigratorVerifier:
     
     # All expected migrators
     EXPECTED_MIGRATORS = [
-        'asana', 'basecamp', 'clickup', 'cognito-forms', 'google-forms',
+        'asana', 'basecamp', 'bpmn', 'clickup', 'cognito-forms', 'google-forms',
         'jotform', 'kissflow', 'monday', 'nextmatter', 'pipefy',
-        'process-street', 'rocketlane', 'trello', 'typeform', 'wrike'
+        'process-street', 'rocketlane', 'surveymonkey', 'trello', 'typeform', 'wrike'
     ]
     
     # Required files for each migrator
@@ -51,16 +56,19 @@ class MigratorVerifier:
         'Best Practices', 'Support'
     ]
     
-    # AI prompt files expected
-    AI_PROMPTS = [
-        'assess_form_complexity.txt',
-        'map_field.txt',
-        'transform_logic.txt'
-    ]
+    # The README section that only applies to a migrator that makes AI calls
+    AI_README_SECTION = 'AI-Powered Features'
     
-    def __init__(self, base_path: str = '~/GitHub/migrator'):
-        """Initialize verifier with base path"""
-        self.base_path = Path(base_path)
+    # What a README says when its migrator ships no AI client on purpose (issue #23).
+    # Matched case-insensitively, with line breaks folded to spaces.
+    NO_AI_STATEMENT = 'makes no ai calls'
+    
+    def __init__(self, base_path: str = None):
+        """Initialize verifier with base path (default: the folder this script is in)"""
+        if base_path is None:
+            self.base_path = Path(__file__).resolve().parent
+        else:
+            self.base_path = Path(os.path.expanduser(base_path))
         self.results = {}
         self.summary = {
             'total_migrators': len(self.EXPECTED_MIGRATORS),
@@ -185,10 +193,16 @@ class MigratorVerifier:
         """Check if all required files exist"""
         passed = 0
         issues = []
+        no_ai = self.declares_no_ai(path)
         
         for file_type, file_pattern in self.REQUIRED_FILES.items():
-            file_path = file_pattern.replace('{vendor}', vendor)
+            # Module names use underscores: process-street ships process_street_client.py
+            file_path = file_pattern.replace('{vendor}', vendor.replace('-', '_'))
             full_path = path / file_path
+            
+            if file_type == 'ai_client' and no_ai:
+                passed += 1  # no AI client on purpose, and the README says so
+                continue
             
             if full_path.exists():
                 passed += 1
@@ -216,9 +230,12 @@ class MigratorVerifier:
         
         passed = 0
         issues = []
+        no_ai = self.declares_no_ai(path)
         
         for section in self.README_SECTIONS:
-            if section.lower() in content:
+            if section == self.AI_README_SECTION and no_ai:
+                passed += 1  # a migrator that makes no AI calls has no AI features to list
+            elif section.lower() in content:
                 passed += 1
             else:
                 issues.append(f"README missing section: {section}")
@@ -302,39 +319,103 @@ class MigratorVerifier:
         
         return passed, issues
     
+    def ai_client_path(self, path: Path) -> Path:
+        return path / 'src' / 'api' / 'ai_client.py'
+    
+    def declares_no_ai(self, path: Path) -> bool:
+        """True when the migrator ships no AI client and its README says it makes no AI calls"""
+        readme_path = path / 'README.md'
+        if self.ai_client_path(path).exists() or not readme_path.exists():
+            return False
+        with open(readme_path, 'r') as f:
+            content = ' '.join(f.read().lower().split())
+        return self.NO_AI_STATEMENT in content
+    
+    def find_template_loads(self, path: Path) -> Tuple[List[Tuple[str, str]], set]:
+        """Every prompt template the migrator's code loads through its AI client.
+        
+        Same rule as shared/tests/test_prompt_templates.py: a call whose first
+        argument is a literal *.txt name, made on a method the AI client defines,
+        anywhere under src/. Returns (template, 'file:line') pairs, and the names
+        the client has in-code text for (bpmn writes its prompts from code).
+        """
+        with open(self.ai_client_path(path), 'r') as f:
+            client_tree = ast.parse(f.read())
+        methods, defaults = set(), set()
+        for node in ast.walk(client_tree):
+            if isinstance(node, ast.ClassDef):
+                methods.update(item.name for item in node.body
+                               if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)))
+            if isinstance(node, ast.Dict):
+                for key, value in zip(node.keys, node.values):
+                    if (isinstance(key, ast.Constant) and isinstance(key.value, str)
+                            and key.value.endswith('.txt')
+                            and (isinstance(value, ast.JoinedStr)
+                                 or (isinstance(value, ast.Constant) and isinstance(value.value, str)))):
+                        defaults.add(key.value)
+        
+        loads = []
+        for py_file in sorted((path / 'src').rglob('*.py')):
+            with open(py_file, 'r') as f:
+                tree = ast.parse(f.read())
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call) and node.args
+                        and isinstance(node.args[0], ast.Constant)
+                        and isinstance(node.args[0].value, str)
+                        and node.args[0].value.endswith('.txt')):
+                    continue
+                name = (node.func.attr if isinstance(node.func, ast.Attribute)
+                        else getattr(node.func, 'id', None))
+                if name in methods:
+                    loads.append((node.args[0].value, f'{py_file.relative_to(path)}:{node.lineno}'))
+        return loads, defaults
+    
     def check_ai_integration(self, path: Path) -> Tuple[int, List[str]]:
-        """Check AI integration completeness"""
+        """Check AI integration completeness (5 checks)
+        
+        A migrator with no AI client passes all five when its README says it makes
+        no AI calls, and fails all five otherwise. One with a client must load at
+        least one prompt template, and every template it loads must be in its
+        src/prompts/ folder or have in-code text.
+        """
         passed = 0
         issues = []
         
         # Check for AI client
-        ai_client_path = path / 'src' / 'api' / 'ai_client.py'
-        if ai_client_path.exists():
-            passed += 1
-            
-            with open(ai_client_path, 'r') as f:
-                content = f.read()
-            
-            if 'fallback' in content.lower():
-                passed += 1
-            else:
-                issues.append("AI client missing fallback logic")
-        else:
-            issues.append("AI client not found")
+        ai_client_path = self.ai_client_path(path)
+        if not ai_client_path.exists():
+            if self.declares_no_ai(path):
+                return 5, []
+            return 0, ["AI client not found, and README.md does not say this migrator makes no AI calls"]
         
-        # Check for prompts directory
-        prompts_dir = path / 'prompts'
-        if prompts_dir.exists():
+        passed += 1
+        
+        with open(ai_client_path, 'r') as f:
+            content = f.read()
+        
+        if 'fallback' in content.lower():
             passed += 1
-            
-            # Check for prompt files
-            prompt_files = list(prompts_dir.glob('*.txt'))
-            if len(prompt_files) >= 2:
-                passed += 1
-            else:
-                issues.append(f"Only {len(prompt_files)} AI prompts found (need at least 2)")
         else:
-            issues.append("Prompts directory not found")
+            issues.append("AI client missing fallback logic")
+        
+        # Check the prompt templates, in the folder ai_client.py reads them from
+        prompts_dir = path / 'src' / 'prompts'
+        loads, defaults = self.find_template_loads(path)
+        missing = [(name, where) for name, where in loads
+                   if name not in defaults and not (prompts_dir / name).is_file()]
+        
+        if prompts_dir.is_dir() or (loads and all(name in defaults for name, _ in loads)):
+            passed += 1
+        else:
+            issues.append("Prompts directory not found: src/prompts/")
+        
+        if not loads:
+            issues.append("AI client is never asked to load a prompt template")
+        elif missing:
+            for name, where in missing:
+                issues.append(f"Prompt template not found: {where} loads src/prompts/{name}")
+        else:
+            passed += 1
         
         # Check .env.example for AI configuration
         env_path = path / '.env.example'
@@ -529,13 +610,8 @@ tenacity>=8.2.0
                         os.chmod(script_path, 0o755)
                         fixes_applied += 1
                 
-                # Create missing prompts directory
-                if 'Prompts directory not found' in issue:
-                    prompts_dir = vendor_path / 'prompts'
-                    if not prompts_dir.exists():
-                        print(f"Creating prompts directory for {vendor}")
-                        prompts_dir.mkdir(parents=True, exist_ok=True)
-                        fixes_applied += 1
+                # A missing prompt template is not fixed here: an empty folder
+                # would not give the AI client the template it loads.
         
         print(f"\nApplied {fixes_applied} automatic fixes")
         print("Please run verification again to see updated results")
