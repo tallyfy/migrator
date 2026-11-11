@@ -52,7 +52,10 @@ jobs:
   # was missing.
   declared-floor:
     name: compiles on the declared Python floor
-    runs-on: ubuntu-latest
+    # Pinned because by 2026-11-11 ubuntu-latest was Ubuntu 26.04, and
+    # actions/python-versions builds no Python 3.9 for 26.04 (it does for 24.04),
+    # so setup-python failed before any file was compiled.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
