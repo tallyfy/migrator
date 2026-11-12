@@ -143,7 +143,7 @@ class FieldTransformer:
         
         # Handle specific field types
         if tallyfy_type in ['dropdown', 'radio', 'multiselect']:
-            tallyfy_field['options'] = self._transform_options(field.get('options', []))
+            tallyfy_field['options'] = self._transform_options(self._source_options(field))
         
         elif tallyfy_type == 'date':
             tallyfy_field['include_time'] = field_type == 'datetime'
@@ -180,6 +180,18 @@ class FieldTransformer:
             sanitized = 'field_' + sanitized
         return sanitized[:50]  # Max field name length
     
+    def _source_options(self, field: Dict[str, Any]) -> List:
+        """Find a choice field's options where Process Street keeps them.
+
+        A form field widget holds them in config.items, each {id, name}
+        (PublicApiSelectFormFieldConfig, Process Street Public API v1.1).
+        config.options is the older shape this repo's fixtures use. A
+        top-level options list, each {value, label, id}, is what
+        GET /workflows/{id}/form-fields/{id}/options returns.
+        """
+        config = field.get('config') or {}
+        return config.get('items') or config.get('options') or field.get('options') or []
+
     def _transform_options(self, options: List) -> List[Dict[str, str]]:
         """Transform field options to Tallyfy format"""
         transformed = []

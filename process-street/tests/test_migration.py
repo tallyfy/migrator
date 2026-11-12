@@ -121,6 +121,63 @@ class TestFieldTransformer(unittest.TestCase):
         })
         self.assertEqual(result['type'], 'dropdown')
 
+    def test_a_select_keeps_the_options_process_street_stores_in_config_items(self):
+        """Regression: a dropdown must not arrive with options: [].
+
+        In the Process Street Public API v1.1 spec (read 2026-11-12 from
+        public-api.process.st/api/v1.1/docs/openapi.json), a form field
+        widget keeps its choices in `config.items`, each `{id, name}`
+        (PublicApiSelectFormFieldConfig). No field config has a top-level
+        `options` key. This transformer read only `field['options']`, so
+        every select came out with no options.
+
+        The payload is a widget from that spec, except that `type` holds the
+        field type this transformer reads. A real widget has
+        `type: FormField` and the subtype in `fieldType`.
+        """
+        result = self.transformer.transform_field({
+            'id': 'Wd3kq0Y1pXvBoc_D9aF8Qw',
+            'taskId': 'Tk7aYp2LmQvBoc_D5_RypA',
+            'type': 'select',
+            'fieldType': 'Select',
+            'key': 'priority',
+            'label': 'Priority',
+            'required': True,
+            'hiddenByDefault': False,
+            'config': {
+                'fieldType': 'Select',
+                'items': [
+                    {'id': 'jmBoZtynZxMBoc_D9aF8Qw', 'name': 'High'},
+                    {'id': 'k2CpAuzoAyNBoc_D9aF8Qw', 'name': 'Medium'},
+                    {'id': 'l3DqBvApBzOBoc_D9aF8Qw', 'name': 'Low'},
+                ],
+                'defaultValue': 'Medium',
+            },
+        })
+        self.assertEqual(result['type'], 'dropdown')
+        self.assertEqual([o['label'] for o in result['options']],
+                         ['High', 'Medium', 'Low'])
+
+    def test_a_select_keeps_options_given_under_config_options(self):
+        """The shape tallyfy/migrator#30 item 13 names, and this file's older fixture."""
+        result = self.transformer.transform_field({
+            'id': 'f2', 'label': 'Priority', 'type': 'select',
+            'config': {'options': [{'label': 'High', 'value': '1'},
+                                   {'label': 'Low', 'value': '2'}]},
+        })
+        self.assertEqual([o['label'] for o in result['options']], ['High', 'Low'])
+
+    def test_a_select_still_reads_a_top_level_options_list(self):
+        """The fallback stays: GET .../form-fields/{id}/options returns
+        `options: [{value, label, id}]`, and a caller may attach that list
+        to the field as it stands."""
+        result = self.transformer.transform_field({
+            'id': 'f2', 'label': 'Priority', 'type': 'select',
+            'options': [{'value': 'High', 'label': 'High',
+                         'id': 'jmBoZtynZxMBoc_D9aF8Qw'}],
+        })
+        self.assertEqual([o['label'] for o in result['options']], ['High'])
+
     def test_the_source_id_and_type_are_retained_for_tracing(self):
         result = self.transformer.transform_field({
             'id': 'f3', 'label': 'Notes', 'type': 'textarea',
