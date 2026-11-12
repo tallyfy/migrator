@@ -201,6 +201,14 @@ class ClickUpMigrationOrchestrator:
                 tasks = self.clickup_client.get_tasks(list_item['id'])
                 discovery_data['tasks'].extend(tasks[:5])  # Sample 5 tasks per list
             
+            # Discover each list's statuses, which become its template's steps.
+            # Get Lists and Get Folderless Lists leave statuses out; only Get
+            # List returns them.
+            logger.info("Discovering list statuses...")
+            for list_item in discovery_data['lists']:
+                list_details = self.clickup_client.get_list(list_item['id'])
+                list_item['statuses'] = list_details.get('statuses', [])
+
             # Discover custom fields
             logger.info("Discovering custom fields...")
             for list_item in discovery_data['lists']:
@@ -309,15 +317,19 @@ class ClickUpMigrationOrchestrator:
             transformed = self.user_transformer.transform_user(user)
             transformation_data['users'].append(transformed)
         
-        # Transform lists to templates
+        # Transform lists to templates. A list's statuses are the stages its
+        # tasks move through, so each status becomes one step, in the order
+        # Get List returns them. The tasks themselves become instances below.
         for list_item in discovery_data.get('lists', []):
+            statuses = list_item.get('statuses', [])
             # Create template from list
             template = {
                 'name': list_item.get('name', 'Untitled List'),
                 'description': list_item.get('content', ''),
                 'folder_id': list_item.get('folder', {}).get('id'),
                 'space_id': list_item.get('space', {}).get('id'),
-                'statuses': list_item.get('statuses', []),
+                'statuses': statuses,
+                'steps': [{'name': s['status']} for s in statuses if s.get('status')],
                 'priority': list_item.get('priority'),
                 'due_date': list_item.get('due_date')
             }
