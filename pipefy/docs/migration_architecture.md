@@ -397,7 +397,7 @@ source:
     introspection_enabled: true
 
 target:
-  # Tallyfy configuration (same as Process Street)
+  # Tallyfy configuration (standard Tallyfy API settings)
   api_url: "${TALLYFY_API_URL}"
   client_id: "${TALLYFY_CLIENT_ID}"
   client_secret: "${TALLYFY_CLIENT_SECRET}"
