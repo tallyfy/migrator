@@ -42,7 +42,7 @@ They are listed below so the gate can assert two things:
   2. the list cannot rot -- if a listed ghost gets fixed, the gate FAILS until
      the entry is deleted, so the inventory can never overstate the problem.
 
-Tracked on issue #6.
+Tracked on issue #30.
 """
 
 import ast

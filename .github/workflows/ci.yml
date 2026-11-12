@@ -151,7 +151,7 @@ jobs:
   #
   # Not yet the full list -- the other 13 vendors have no tests/ directory at all.
   # Add each here as a suite is written; a permanently-red job teaches everyone to
-  # ignore CI, so a vendor only joins once it is green. Tracked in #6.
+  # ignore CI, so a vendor only joins once it is green. Tracked in #30.
   vendor-tests:
     name: tests ${{ matrix.vendor }}
     runs-on: ubuntu-latest
