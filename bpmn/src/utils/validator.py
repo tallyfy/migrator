@@ -51,10 +51,10 @@ class Validator:
         # emits: tasks, events and sequence_flows sit directly on the process,
         # events carry 'position', and flows carry 'source_ref'/'target_ref'.
         tasks = process.get('tasks', [])
-
+        
         if not tasks:
             self.warnings.append(f"Process {process.get('id', 'unknown')} has no tasks")
-
+        
         # Check for start and end events
         events = process.get('events', [])
         start_events = [e for e in events if e.get('position') == 'start']
