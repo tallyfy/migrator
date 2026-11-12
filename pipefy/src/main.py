@@ -441,13 +441,12 @@ class PipefyMigrationOrchestrator:
                 # 'prerun')), so they must be attached BEFORE the template is
                 # created.
                 #
-                # NOTE: `_transform_start_form_fields` is broken upstream -- it
-                # shadows its accumulator with the loop variable and calls
-                # .append() on a dict, so it returns a dict (or []) rather than a
-                # list of fields. Guard the shape here so a malformed value
-                # cannot feed bare strings into the normaliser; repairing that
-                # transformer needs Pipefy start-form ground truth and is
-                # separate work.
+                # NOTE: `_transform_start_form_fields` used to shadow its
+                # accumulator with the loop variable and return a dict (or [])
+                # instead of a list of fields. It was fixed and given tests in
+                # pipefy/tests/test_phase_transformer.py (migrator#30, item 11).
+                # The shape guard stays, so a malformed value can still never
+                # feed bare strings into the normaliser.
                 if not isinstance(template_captures, list):
                     logger.error(
                         "Start-form fields for pipe %s came back as %s, not a list; "
