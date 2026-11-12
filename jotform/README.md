@@ -140,7 +140,7 @@ class FormComplexityAnalyzer:
     """Analyzes Jotform complexity to determine migration strategy"""
     
     def assess_form_complexity(self, form):
-        """Similar to Typeform, but handles Jotform's unique features"""
+        """Scores a form's complexity, including Jotform's unique features"""
         
         complexity_score = 0
         issues = []
