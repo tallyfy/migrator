@@ -149,16 +149,16 @@ jobs:
   # Per-vendor suites, for the vendors whose suites actually run green. Kept separate
   # from shared-tests so one vendor's rot cannot mask a shared/ regression.
   #
-  # Not yet the full list -- the other 13 vendors have no tests/ directory at all.
+  # Not yet the full list -- the other 9 vendors have no tests/ directory at all.
   # Add each here as a suite is written; a permanently-red job teaches everyone to
-  # ignore CI, so a vendor only joins once it is green. Tracked in #6.
+  # ignore CI, so a vendor only joins once it is green. Tracked in #30.
   vendor-tests:
     name: tests ${{ matrix.vendor }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        vendor: [asana, kissflow, monday, process-street, surveymonkey]
+        vendor: [asana, bpmn, google-forms, kissflow, monday, pipefy, process-street, surveymonkey]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

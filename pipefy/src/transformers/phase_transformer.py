@@ -287,19 +287,19 @@ class PhaseToStepTransformer:
         from .field_transformer import FieldTransformer
         
         field_transformer = FieldTransformer(self.id_mapper)
-        field = []
-        
-        for field in start_fields:
+        tallyfy_captures = []
+
+        for start_field in start_fields:
             try:
-                field = field_transformer.transform_field(field)
+                field = field_transformer.transform_field(start_field)
                 # Mark as start form field
                 field['metadata'] = field.get('metadata', {})
                 field['metadata']['is_start_form'] = True
-                field.append(field)
+                tallyfy_captures.append(field)
             except Exception as e:
                 logger.warning(f"Failed to transform start form field: {e}")
-        
-        return field
+
+        return tallyfy_captures
     
     def _create_routing_options(self, next_phases: List[Dict], all_phases: List[Dict]) -> List[Dict[str, Any]]:
         """

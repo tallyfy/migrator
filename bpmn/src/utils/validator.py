@@ -47,17 +47,18 @@ class Validator:
         if not process.get('id'):
             self.errors.append("Process missing ID")
         
-        # Check for at least one task
-        elements = process.get('elements', {})
-        tasks = elements.get('tasks', [])
+        # Check for at least one task. This reads the shape BPMNClient.to_dict()
+        # emits: tasks, events and sequence_flows sit directly on the process,
+        # events carry 'position', and flows carry 'source_ref'/'target_ref'.
+        tasks = process.get('tasks', [])
         
         if not tasks:
             self.warnings.append(f"Process {process.get('id', 'unknown')} has no tasks")
         
         # Check for start and end events
-        events = elements.get('events', [])
-        start_events = [e for e in events if e.get('category') == 'start']
-        end_events = [e for e in events if e.get('category') == 'end']
+        events = process.get('events', [])
+        start_events = [e for e in events if e.get('position') == 'start']
+        end_events = [e for e in events if e.get('position') == 'end']
         
         if not start_events:
             self.warnings.append(f"Process {process.get('id', 'unknown')} has no start event")
@@ -66,7 +67,7 @@ class Validator:
             self.warnings.append(f"Process {process.get('id', 'unknown')} has no end event")
         
         # Check for disconnected elements
-        flows = elements.get('flows', [])
+        flows = process.get('sequence_flows', [])
         self._check_connectivity(tasks, flows, process.get('id', 'unknown'))
     
     def _check_connectivity(self, tasks: List[Dict], flows: List[Dict], process_id: str):
@@ -75,8 +76,8 @@ class Validator:
         connected_elements = set()
         
         for flow in flows:
-            source = flow.get('sourceRef')
-            target = flow.get('targetRef')
+            source = flow.get('source_ref')
+            target = flow.get('target_ref')
             
             if source:
                 connected_elements.add(source)
