@@ -44,12 +44,13 @@ class TemplateTransformer:
         # Override in vendor-specific implementation
         steps = []
         
-        # Extract steps/tasks from vendor format
-        vendor_steps = template.get('steps', template.get('tasks', []))
+        # Extract steps/tasks from vendor format. main.py hands over a Google
+        # Form's questions and sections as 'items', each with its text in 'title'.
+        vendor_steps = template.get('steps', template.get('tasks', template.get('items', [])))
         
         for idx, step in enumerate(vendor_steps):
             steps.append({
-                'name': step.get('name', f'Step {idx + 1}'),
+                'name': step.get('name', step.get('title', f'Step {idx + 1}')),
                 'description': step.get('description', ''),
                 'type': 'task',
                 'fields': self._transform_step_fields(step),
