@@ -335,7 +335,7 @@ The database uses multiple PostgreSQL schemas for logical separation:
 
 **Supported Integrations**:
 - **Recurly** - Billing and subscriptions
-- **PubNub** - Real-time messaging
+- **Laravel Reverb** - Real-time messaging (self-hosted)
 - **AWS S3** - File storage
 - **Mailgun** - Email delivery
 - **SAML2** - Enterprise SSO
